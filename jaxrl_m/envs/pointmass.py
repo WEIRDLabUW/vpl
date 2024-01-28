@@ -86,7 +86,8 @@ class PointMassEnv(MultiModalEnv):
             self.plot_goals(ax, 100)
         plt.tight_layout()
         if wandb_log:
-            wandb.log({"reward_ground_truth": wandb.Image(fig)})
+            if wandb_log:
+                return wandb.Image(fig)
         else:
             plt.savefig("reward_plot")
         plt.close(fig)

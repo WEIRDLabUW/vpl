@@ -191,4 +191,6 @@ def plot_vae(env, reward_model, dataset, num_samples=4, train_obs=None, train_r=
     plot_dict["prior"] = plot_z(env, reward_model, prior_latents)
     plot_dict["posterior"] = plot_z(env, reward_model, posterior_latents)
     plot_dict["biased"] = plot_z(env, reward_model, biased_latents)
+    if hasattr(env, "plot_gt"):
+        plot_dict["gt"] = env.plot_gt(wandb_log=True)
     return plot_dict

@@ -161,4 +161,4 @@ cython_debug/
 
 slurm*/
 pref_datasets
-logs
+logs*

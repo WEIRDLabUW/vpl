@@ -162,18 +162,18 @@ class MeanVarianceModel(nn.Module):
         return self.reward_model(r)[:, 0]
     
     def get_variance(self, r):
-        return F.softplus(r[:, 1])
+        return torch.exp(0.5 * r[:, 1])
 
     def sample_reward(self, r):
         r = self.reward_model(r)
-        mean, std = r[:, 0], F.softplus(r[:, 1])
+        mean, std = r[:, 0], torch.exp(0.5 * r[:, 1])
         return torch.normal(mean, std)
 
     def reconstruction_loss(self, rewards_chosen, rewards_rejected):
         mean_chosen = rewards_chosen[:, 0]
-        std_chosen = F.softplus(rewards_chosen[:, 1])
+        std_chosen = torch.exp(0.5 * rewards_chosen[:, 1])
         mean_rejected = rewards_rejected[:, 0]
-        std_rejected = F.softplus(rewards_rejected[:, 1])
+        std_rejected = torch.exp(0.5 * rewards_rejected[:, 1])
 
         diff_mean = mean_chosen - mean_rejected
         var_combined = std_chosen**2 + std_rejected**2

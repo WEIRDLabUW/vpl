@@ -177,6 +177,9 @@ def main(_):
                         observations, observations_2, labels
                     )
 
+                    for key, val in prefix_metrics(batch_metrics, "eval").items():
+                        metrics[key].append(val)
+
             if FLAGS.debug_plots:
                 if FLAGS.model_type == "MLP":
                     fig_dict = putils.plot_mlp(gym_env, reward_model)

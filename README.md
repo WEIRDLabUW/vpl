@@ -51,6 +51,21 @@ Example Launchers:
 1. [Mujoco SAC](examples/mujoco/run_mujoco_sac.py)
 2. [D4RL IQL](examples/mujoco/run_d4rl_iql.py)
 
+### Datasets
+
+1. pointmass-fixed: pref_datasets/maze2d-pointmass-fixed-v0/relabelled_queries_num10000_q1_s32
+2. pointmass: ./pref_datasets/maze2d-pointmass-v0/queries_num10000_q1_s16
+3. four_rooms-fixed: ./pref_datasets/maze2d-fourrooms-fixed-v0/relabelled_queries_num10000_q1_s32
+4. four_rooms: 
+   1. ./pref_datasets/maze2d-fourrooms-v0/queries_num10000_q1_s16
+   2. From offline dataset:
+      1. pref_datasets/maze2d-fourrooms-v0/queries_num5000_q1_s16
+      2. pref_datasets/maze2d-fourrooms-v0/relabelled_queries_num5000_q1_s16
+5. kitchen-fixed: ./pref_datasets/maze2d-kitchen-fixed-v0/relabelled_queries_num10000_q1_s32
+   1. pref_datasets/kitchen-fixed-v0/queries_num1000_q5_s8
+   2. pref_datasets/kitchen-fixed-v0/relabelled_queries_num1000_q5_s8
+6. kitchen: ./pref_datasets/maze2d-kitchen-v0/queries_num10000_q1_s16
+
 
 ### Citation
 

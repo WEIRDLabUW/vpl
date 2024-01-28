@@ -159,7 +159,7 @@ class FourRoomsEnv(MultiModalEnv):
             ax.scatter(10, 10, c="black")
         plt.tight_layout()
         if wandb_log:
-            wandb.log({"eval/ground_truth": wandb.Image(fig)})
+            return wandb.Image(fig)
         else:
             plt.savefig("reward_plot.png")
         plt.close(fig)
