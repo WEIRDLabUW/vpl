@@ -1,4 +1,4 @@
-name: offline
+name: vpl
 channels:
   - conda-forge
   - defaults
@@ -33,6 +33,7 @@ dependencies:
   - parso=0.8.3=pyhd8ed1ab_0
   - pexpect=4.8.0=pyh1a96a4e_2
   - pickleshare=0.7.5=py_1003
+  - pip=23.3.2
   - platformdirs=4.1.0=pyhd8ed1ab_0
   - prompt-toolkit=3.0.42=pyha770c72_0
   - prompt_toolkit=3.0.42=hd8ed1ab_0
