@@ -1,9 +1,20 @@
 from typing import Dict
 import jax
-import gym
 import numpy as np
 from collections import defaultdict
 import time
+
+from typing import Optional, Sequence
+from collections import OrderedDict
+import gym
+import numpy as np
+import sys
+import wandb
+from PIL import Image, ImageDraw, ImageFont
+from typing import Dict, Optional, Any
+
+import gym
+import numpy as np
 
 
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
@@ -26,7 +37,8 @@ def supply_rng(f, rng=jax.random.PRNGKey(0)):
 
 def flatten(d, parent_key="", sep="."):
     """
-    Helper function that flattens a dictionary of dictionaries into a single dictionary.
+    Helper function that flattens a dictionary of dictionaries
+    into a single dictionary.
     E.g: flatten({'a': {'b': 1}}) -> {'a.b': 1}
     """
     items = []
@@ -44,28 +56,28 @@ def add_to(dict_of_lists, single_dict):
         dict_of_lists[k].append(v)
 
 
-def evaluate(policy_fn, env: gym.Env, num_episodes: int) -> Dict[str, float]:
-    """
-    Evaluates a policy in an environment by running it for some number of episodes,
-    and returns average statistics for metrics in the environment's info dict.
+def evaluate(
+    policy_fn,
+    env: gym.Env,
+    num_episodes: int,
+    save_video: bool = False,
+    render_frame: bool = True,
+    name="eval_video",
+    additional_eval_func: Optional[Any] = None,
+    reset_kwargs={},
+) -> Dict[str, float]:
+    if save_video:
+        env = WANDBVideo(env, name=name, max_videos=1, render_frame=render_frame)
+    env = EpisodeMonitor(env)
 
-    If you wish to log environment returns, you can use the EpisodeMonitor wrapper (see below).
-
-    Arguments:
-        policy_fn: A function that takes an observation and returns an action.
-            (if your policy needs JAX RNG keys, use supply_rng to supply a random key)
-        env: The environment to evaluate in.
-        num_episodes: The number of episodes to run for.
-    Returns:
-        A dictionary of average statistics for metrics in the environment's info dict.
-
-    """
     stats = defaultdict(list)
-    for _ in range(num_episodes):
-        observation, done = env.reset(), False
+    for i in range(num_episodes):
+        observation = env.reset(**reset_kwargs)
+        done = False
         while not done:
             action = policy_fn(observation)
-            observation, _, done, info = env.step(action)
+            observation, rew, done, info = env.step(action)
+            done = done
             add_to(stats, flatten(info))
         add_to(stats, flatten(info, parent_key="final"))
 
@@ -74,53 +86,109 @@ def evaluate(policy_fn, env: gym.Env, num_episodes: int) -> Dict[str, float]:
     return stats
 
 
-def evaluate_with_trajectories(
-    policy_fn, env: gym.Env, num_episodes: int
-) -> Dict[str, float]:
-    """
-    Same as evaluate, but also returns the trajectories of observations, actions, rewards, etc.
+class WANDBVideo(gym.Wrapper):
+    def __init__(
+        self,
+        env: gym.Env,
+        name: str = "video",
+        render_kwargs={},
+        max_videos: Optional[int] = None,
+        pixel_keys: Sequence[str] = ("pixels",),
+        render_frame: bool = False,
+        agent=None,
+    ):
+        super().__init__(env)
+        self._name = name
+        self._render_kwargs = render_kwargs
+        self._max_videos = max_videos
+        self._video = OrderedDict()
+        self._rendered_video = []
+        self._rewards = []
+        self._pixel_keys = pixel_keys
+        self._render_frame = render_frame
+        if self._render_frame:
+            assert len(self._pixel_keys) == 1 and self._pixel_keys[0] == "pixels"
+        self._agent = agent
+        if self._agent:
+            self._curr_obs = None
 
-    Arguments:
-        See evaluate.
-    Returns:
-        stats: See evaluate.
-        trajectories: A list of dictionaries (each dictionary corresponds to an episode),
-            where trajectories[i] = {
-                'observation': list_of_observations,
-                'action': list_of_actions,
-                'next_observation': list_of_next_observations,
-                'reward': list of rewards,
-                'done': list of done flags,
-                'info': list of info dicts,
-            }
-    """
+    def get_rendered_video(self):
+        rendered_video = [np.array(v) for v in self._video.values()]
+        rendered_video = np.concatenate(rendered_video, axis=1)
+        if rendered_video.ndim == 5:
+            rendered_video = rendered_video[..., -1]
+        return rendered_video
 
-    trajectories = []
-    stats = defaultdict(list)
+    def get_video(self):
+        video = {k: np.array(v) for k, v in self._video.items()}
+        return video
 
-    for _ in range(num_episodes):
-        trajectory = defaultdict(list)
-        observation, done = env.reset(), False
-        while not done:
-            action = policy_fn(observation)
-            next_observation, r, done, info = env.step(action)
-            transition = dict(
-                observation=observation,
-                next_observation=next_observation,
-                action=action,
-                reward=r,
-                done=done,
-                info=info,
-            )
-            add_to(trajectory, transition)
-            add_to(stats, flatten(info))
-            observation = next_observation
-        add_to(stats, flatten(info, parent_key="final"))
-        trajectories.append(trajectory)
+    def get_rewards(self):
+        return self._rewards
 
-    for k, v in stats.items():
-        stats[k] = np.mean(v)
-    return stats, trajectories
+    def _add_frame(self, obs, action=None):
+        if self._max_videos is not None and self._max_videos <= 0:
+            return
+        if self._render_frame:
+            frame = self.render(mode="rgb_array")
+            if self._agent:
+                if self._curr_obs is not None:
+                    value = self._agent.eval_critic(self._curr_obs, action)
+                    img = Image.fromarray(frame)
+                    l, w, d = frame.shape
+                    i1 = ImageDraw.Draw(img)
+                    i1.text(
+                        (l // 20, w // 20),
+                        "critic: " + str(np.round(value, 3)),
+                        font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
+                        fill=(255, 255, 255),
+                    )
+                    frame = np.asarray(img)
+                self._curr_obs = obs
+            if "pixels" in self._video:
+                self._video["pixels"].append(frame)
+            else:
+                self._video["pixels"] = [frame]
+        elif isinstance(obs, dict):
+            img = []
+            for k in self._pixel_keys:
+                if k in obs:
+                    if k in self._video:
+                        self._video[k].append(obs[k])
+                    else:
+                        self._video[k] = [obs[k]]
+        else:
+            raise Exception("bad obs")
+
+    def _add_rewards(self, rew):
+        self._rewards.append(rew)
+
+    def reset(self, **kwargs):
+        self._video.clear()
+        self._rendered_video.clear()
+        self._rewards.clear()
+        if self._agent:
+            self._curr_obs = None
+        obs = super().reset(**kwargs)
+        self._add_frame(obs)
+        return obs
+
+    def step(self, action: np.ndarray):
+        obs, reward, done, info = super().step(action)
+        # done = done
+        self._add_frame(obs, action)
+        self._add_rewards(reward)
+
+        if done and len(self._video) > 0:
+            if self._max_videos is not None:
+                self._max_videos -= 1
+            video = self.get_rendered_video().transpose(0, 3, 1, 2)
+            if video.shape[1] == 1:
+                video = np.repeat(video, 3, 1)
+            video = wandb.Video(video, fps=30, format="mp4")
+            wandb.log({self._name: video}, commit=False)
+
+        return obs, reward, done, info
 
 
 class EpisodeMonitor(gym.ActionWrapper):
@@ -135,11 +203,13 @@ class EpisodeMonitor(gym.ActionWrapper):
         self.reward_sum = 0.0
         self.episode_length = 0
         self.start_time = time.time()
+        self.success = 0.0
 
     def step(self, action: np.ndarray):
         observation, reward, done, info = self.env.step(action)
 
         self.reward_sum += reward
+        self.success = max(self.success, info.get("success", 0.0))
         self.episode_length += 1
         self.total_timesteps += 1
         info["total"] = {"timesteps": self.total_timesteps}
@@ -149,7 +219,7 @@ class EpisodeMonitor(gym.ActionWrapper):
             info["episode"]["return"] = self.reward_sum
             info["episode"]["length"] = self.episode_length
             info["episode"]["duration"] = time.time() - self.start_time
-
+            info["episode"]["success"] = self.success
             if hasattr(self, "get_normalized_score"):
                 info["episode"]["normalized_return"] = (
                     self.get_normalized_score(info["episode"]["return"]) * 100.0
