@@ -5,7 +5,7 @@ import numpy as np
 
 import tqdm
 import jaxrl_m.learners.iql as learner
-import d4rl_utils
+import jaxrl_m.learners.d4rl_utils as d4rl_utils
 
 from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
 import wandb

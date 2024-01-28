@@ -31,7 +31,9 @@ OBJECT_THRESH = {
 
 
 class FrankaKitchenEnv(MultiModalEnv):
-    def __init__(self, dataset_path, fixed_mode=False, task_config=["slide cabinet", "microwave"]):
+    def __init__(
+        self, dataset_path, fixed_mode=False, task_config=["slide cabinet", "microwave"]
+    ):
         super().__init__(dataset_path=dataset_path, fixed_mode=fixed_mode)
 
         self.env = KitchenMicrowaveKettleLightSliderV0()
@@ -45,6 +47,8 @@ class FrankaKitchenEnv(MultiModalEnv):
 
         if self.fixed_mode:
             self.env_task = self.all_task_orders[self.env_mode]
+
+        self.relabel_offline_reward = True
 
     def set_mode(self, mode):
         super().set_mode(mode)
