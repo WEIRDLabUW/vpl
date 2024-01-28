@@ -6,7 +6,7 @@ import jax
 import tqdm
 import gym
 
-import sac as learner
+import jaxrl_m.learners.sac as learner
 
 from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
 import wandb
@@ -35,8 +35,8 @@ flags.DEFINE_integer('start_steps', int(1e4), 'Number of initial exploration ste
 
 wandb_config = default_wandb_config()
 wandb_config.update({
-    'project': 'd4rl_test',
-    'group': 'sac_test',
+    'project': os.environ.get('WANDB_PROJECT', 'sac_test'),
+    'group': os.environ.get('WANDB_GROUP', 'sac'),
     'name': 'sac_{env_name}',
 })
 

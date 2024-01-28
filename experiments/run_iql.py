@@ -4,7 +4,7 @@ from functools import partial
 import numpy as np
 
 import tqdm
-import iql as learner
+import jaxrl_m.learners.iql as learner
 import d4rl_utils
 
 from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
@@ -32,8 +32,8 @@ flags.DEFINE_integer('max_steps', int(1e6), 'Number of training steps.')
 
 wandb_config = default_wandb_config()
 wandb_config.update({
-    'project': 'd4rl_test',
-    'group': 'iql_test',
+    'project': os.environ.get('WANDB_PROJECT', 'iql_test'),
+    'group': os.environ.get('WANDB_GROUP', 'iql'),
     'name': 'iql_{env_name}',
 })
 
