@@ -87,7 +87,7 @@ class MujocoEnv(gym.Env):
         try:
             self.action_space = spaces.Box(
                 act_lower, act_upper, dtype=np.float32)
-            if isinstance(observation, collections.Mapping):
+            if isinstance(observation, collections.abc.Mapping):
                 self.observation_space = spaces.Dict({
                 k: spaces.Box(-np.inf, np.inf, shape=v.shape, dtype=np.float32) for k, v in observation.items()})
             else:
