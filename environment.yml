@@ -215,4 +215,3 @@ dependencies:
       - werkzeug==3.0.1
       - wrapt==1.16.0
       - zipp==3.17.0
-prefix: /home/max/anaconda3/envs/offline
