@@ -61,8 +61,8 @@ class MultiModalEnv(gym.Env):
         obs, reward, done, info = self.env.step(actions)
         info["vel"] = obs[2:4]
         info["success"] = self.get_success(obs[:2])
-        if self.fixed_mode:
-            reward = self.get_reward(obs[:2][None, None], self.env_mode)[0,0]
+        # if self.fixed_mode:
+        #     reward = self.get_reward(obs[:2][None, None], self.env_mode)[0,0]
         return np.array(obs[:2]) / self.max_x, reward, done, info
 
     def get_success(self, state):

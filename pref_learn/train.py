@@ -197,7 +197,7 @@ def main(_):
                 break
 
         if epoch % FLAGS.save_freq == 0:
-            torch.save(reward_model.state_dict(), save_dir + f"/model_{epoch}.pt")
+            torch.save(reward_model, save_dir + f"/model_{epoch}.pt")
 
         if FLAGS.use_annealing:
             reward_model.annealer.step()
