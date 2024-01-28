@@ -15,6 +15,7 @@ from ml_collections import config_flags
 import pickle
 from flax.training import checkpoints
 
+import d4rl
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('env_name', 'halfcheetah-expert-v2', 'Environment name.')
@@ -29,6 +30,7 @@ flags.DEFINE_integer('eval_interval', 10000, 'Eval interval.')
 flags.DEFINE_integer('save_interval', 25000, 'Eval interval.')
 flags.DEFINE_integer('batch_size', 256, 'Mini batch size.')
 flags.DEFINE_integer('max_steps', int(1e6), 'Number of training steps.')
+flags.DEFINE_bool('save_video', False, 'Save video of the agent.')
 
 wandb_config = default_wandb_config()
 wandb_config.update({
@@ -65,8 +67,8 @@ def main(_):
     env = d4rl_utils.make_env(FLAGS.env_name)
     dataset = d4rl_utils.get_dataset(env)
 
-    normalizing_factor = get_normalization(dataset)
-    dataset = dataset.copy({'rewards': dataset['rewards'] / normalizing_factor})
+    # normalizing_factor = get_normalization(dataset)
+    # dataset = dataset.copy({'rewards': dataset['rewards'] / normalizing_factor})
 
     example_batch = dataset.sample(1)
     agent = learner.create_learner(FLAGS.seed,
@@ -88,7 +90,12 @@ def main(_):
 
         if i % FLAGS.eval_interval == 0:
             policy_fn = partial(supply_rng(agent.sample_actions), temperature=0.0)
-            eval_info = evaluate(policy_fn, env, num_episodes=FLAGS.eval_episodes)
+            eval_info = evaluate(
+                policy_fn,
+                env,
+                num_episodes=FLAGS.eval_episodes,
+                save_video=FLAGS.save_video,
+            )
 
             eval_metrics = {f'evaluation/{k}': v for k, v in eval_info.items()}
             wandb.log(eval_metrics, step=i)

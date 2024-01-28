@@ -1,6 +1,7 @@
 import d4rl
 import gym
 import numpy as np
+from tqdm import tqdm
 
 from jaxrl_m.dataset import Dataset
 from jaxrl_m.evaluation import EpisodeMonitor
@@ -43,16 +44,28 @@ def get_dataset(
 
     if hasattr(env, "relabel_offline_reward") and env.relabel_offline_reward:
         dataset["rewards"] = relabel_rewards(
-            env, dataset["observations"], dataset["rewards"]
+            env, dataset["observations"], dataset["dones_float"]
         )
 
     dataset = {k: v.astype(np.float32) for k, v in dataset.items()}
     return Dataset(dataset)
 
 
-def relabel_rewards(env, observations, rewards, batch_size=256):
-    new_rewards = np.zeros_like(rewards)
-    for i in range(0, len(observations), batch_size):
-        obs = observations[i : i + batch_size][None]
-        new_rewards[i : i + batch_size] = env.get_reward(obs)[0]
-    return new_rewards
+def split_into_trajectories(observations, dones_float):
+    trajs = [[]]
+
+    for i in tqdm(range(len(observations))):
+        trajs[-1].append((observations[i], dones_float[i]))
+        if dones_float[i] == 1.0 and i + 1 < len(observations):
+            trajs.append([])
+
+    return trajs
+
+
+def relabel_rewards(env, observations, dones_float):
+    new_rewards = []
+    trajs = split_into_trajectories(observations, dones_float)
+    for traj in trajs:
+        obs = np.array([t[0] for t in traj])
+        new_rewards.extend(env.get_reward(obs[None], env.sample_mode())[0])
+    return np.array(new_rewards)

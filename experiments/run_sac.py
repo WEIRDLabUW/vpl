@@ -17,6 +17,7 @@ from ml_collections import config_flags
 import pickle
 from flax.training import checkpoints
 
+import d4rl
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "HalfCheetah-v2", "Environment name.")
