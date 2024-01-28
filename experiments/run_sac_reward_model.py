@@ -1,9 +1,11 @@
 import os
 from absl import app, flags
+from collections import defaultdict
 from functools import partial
 import numpy as np
 import jax
 import tqdm
+import torch
 import gym
 
 import jaxrl_m.learners.sac as learner
@@ -33,8 +35,8 @@ flags.DEFINE_integer("batch_size", 256, "Mini batch size.")
 flags.DEFINE_integer("max_steps", int(1e6), "Number of training steps.")
 flags.DEFINE_integer("start_steps", int(1e4), "Number of initial exploration steps.")
 flags.DEFINE_bool("save_video", False, "Save video of evaluation.")
-flags.DEFINE_bool("use_reward_model", False, "Use reward model for training.")
-flags.DEFINE_reward_model_path()
+flags.DEFINE_string("model_type", "MLP", "Path to reward model.")
+flags.DEFINE_string("ckpt", "", "Path to reward model.")
 
 wandb_config = default_wandb_config()
 wandb_config.update(
@@ -50,6 +52,42 @@ config_flags.DEFINE_config_dict(
     "config", learner.get_default_config(), lock_config=False
 )
 
+
+def get_reward_model(model_type, ckpt):
+    if os.path.isdir(ckpt):
+        models = [f for f in os.listdir(ckpt) if os.path.isfile(os.path.join(ckpt, f)) and f.startswith('model_')]
+        max_epoch = -1
+        max_epoch_model = None
+        
+        for model in models:
+            try:
+                epoch = int(model.split('_')[1].split('.')[0])
+                if epoch > max_epoch:
+                    max_epoch = epoch
+                    max_epoch_model = model
+            except ValueError:
+                pass
+        ckpt = os.path.join(ckpt, max_epoch_model)
+
+    print(f"Loading {model_type} reward model")
+    reward_model = torch.load(ckpt)
+    return reward_model
+
+
+def relabel_trajectory(trajectory, reward_model, model_type):
+    trajectory = (
+        torch.from_numpy(trajectory).float().to(next(reward_model.parameters()).device)
+    )
+    with torch.no_grad():
+        if model_type == "MLP":
+            rewards = reward_model.get_reward(trajectory[:, 0:2])
+        elif model_type == "Categorical" or model_type == "MeanVar":
+            rewards = reward_model.sample_reward(trajectory)
+        else:
+            z = reward_model.sample_prior(size=1).repeat(trajectory.shape[0], 1)
+            trajectory = torch.cat([trajectory, z], dim=-1)
+            rewards = reward_model.get_reward(trajectory)
+    return rewards.cpu().numpy()
 
 def main(_):
     # Create wandb logger
@@ -88,10 +126,13 @@ def main(_):
         **FLAGS.config,
     )
 
+    reward_model = get_reward_model(FLAGS.model_type, FLAGS.ckpt)
+
     exploration_metrics = dict()
     obs = env.reset()
     exploration_rng = jax.random.PRNGKey(0)
 
+    trajectory = defaultdict(list)
     for i in tqdm.tqdm(
         range(1, FLAGS.max_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
@@ -104,22 +145,32 @@ def main(_):
         next_obs, reward, done, info = env.step(action)
         mask = float(not done or "TimeLimit.truncated" in info)
 
-        replay_buffer.add_transition(
-            dict(
-                observations=obs,
-                actions=action,
-                rewards=reward,
-                masks=mask,
-                next_observations=next_obs,
-            )
-        )
+        trajectory['observations'].append(obs)
+        trajectory['actions'].append(action)
+        trajectory['rewards'].append(reward)
+        trajectory['masks'].append(mask)
+        trajectory['next_observations'].append(next_obs)
         obs = next_obs
 
         if done:
             exploration_metrics = {
                 f"exploration/{k}": v for k, v in flatten(info).items()
             }
+            observations = np.array(trajectory['observations'])
+            trajectory['rewards'] = relabel_trajectory(observations, reward_model, FLAGS.model_type)
+            for i in range(len(trajectory['observations'])):
+                replay_buffer.add_transition(
+                    dict(
+                        observations=trajectory['observations'][i],
+                        actions=trajectory['actions'][i],
+                        rewards=trajectory['rewards'][i],
+                        masks=trajectory['masks'][i],
+                        next_observations=trajectory['next_observations'][i],
+                    )
+                )
+            
             obs = env.reset()
+            trajectory = defaultdict(list)
 
         if replay_buffer.size < FLAGS.start_steps:
             continue
