@@ -1,6 +1,8 @@
+import math
+
 import gym
-import numpy as np
 import h5py
+import numpy as np
 from tqdm import tqdm
 
 
@@ -131,3 +133,18 @@ class MultiModalEnv(gym.Env):
             N_samples,
         ), "Terminals has wrong shape: %s" % (str(data_dict["rewards"].shape))
         return data_dict
+    
+    def get_biased_data(self, set_len):
+        w, l, _ = self.factor_int(set_len*2)
+        obs = np.mgrid[0:1:w*1j, 0:1:l*1j]
+        obs = obs.reshape(obs.shape[0], -1).T
+        idxs = np.random.permutation(np.arange(obs.shape[0]))
+        return obs[idxs[:set_len]], obs[idxs[set_len:]]
+    
+    def factor_int(self, n):
+        val = math.ceil(math.sqrt(n))
+        val2 = int(n/val)
+        while val2 * val != float(n):
+            val -= 1
+            val2 = int(n/val)
+        return val, val2, n

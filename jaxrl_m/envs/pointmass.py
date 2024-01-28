@@ -100,13 +100,6 @@ class PointMassEnv(MultiModalEnv):
                 / (self.x_range[1] - self.x_range[0])
             )
             ax.scatter(target_p[0], target_p[1], s=20, c="red", marker="*")
-
-    # def get_data_for_z(self, query_len, mode_n):
-    #     obs1 = np.array(
-    #         [self.observation_space.sample() / self.max_x for _ in range(query_len)]
-    #     )[:, None]
-    #     obs2 = np.array(
-    #         [self.observation_space.sample() / self.max_x for _ in range(query_len)]
-    #     )[:, None]
-    #     r1, r2 = self.get_preference_rewards(obs1, obs2, mode=mode_n)
-    #     return obs1, obs2, r1, r2
+            if self.fixed_mode:
+                break
+        
