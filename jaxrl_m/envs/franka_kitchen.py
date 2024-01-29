@@ -69,6 +69,7 @@ class FrankaKitchenEnv(MultiModalEnv):
         info["success"] = self.get_success(obs)
         if info["success"] == 1:
             done = True
+        reward = self.get_reward(obs[None, None], self.env_mode)[0, 0]
         return obs, reward, done, info
 
     def get_success(self, state):

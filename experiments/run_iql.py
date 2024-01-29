@@ -40,7 +40,7 @@ wandb_config.update({
 })
 
 config_flags.DEFINE_config_dict('wandb', wandb_config, lock_config=False)
-config_flags.DEFINE_config_dict('config', learner.get_default_config(), lock_config=False)
+config_flags.DEFINE_config_file('config', "configs/kitchen_config.py", lock_config=False)
 
 def get_normalization(dataset):
         returns = []

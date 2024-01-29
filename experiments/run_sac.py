@@ -33,6 +33,7 @@ flags.DEFINE_integer("batch_size", 256, "Mini batch size.")
 flags.DEFINE_integer("max_steps", int(1e6), "Number of training steps.")
 flags.DEFINE_integer("start_steps", int(1e4), "Number of initial exploration steps.")
 flags.DEFINE_bool("save_video", False, "Save video of evaluation.")
+flags.DEFINE_bool("initialise_buffer", False, "Initialise buffer with expert data.")
 
 wandb_config = default_wandb_config()
 wandb_config.update(
