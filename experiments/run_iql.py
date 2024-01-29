@@ -14,6 +14,7 @@ from jaxrl_m.evaluation import supply_rng, evaluate
 from ml_collections import config_flags
 import pickle
 from flax.training import checkpoints
+from .iql_utils import get_reward_model, relabel_rewards
 
 import d4rl
 
@@ -31,6 +32,13 @@ flags.DEFINE_integer('save_interval', 25000, 'Eval interval.')
 flags.DEFINE_integer('batch_size', 256, 'Mini batch size.')
 flags.DEFINE_integer('max_steps', int(1e6), 'Number of training steps.')
 flags.DEFINE_bool('save_video', False, 'Save video of the agent.')
+
+flags.DEFINE_bool('use_reward_model', False, 'Use reward model.')
+flags.DEFINE_string("model_type", "MLP", "Path to reward model.")
+flags.DEFINE_string("ckpt", "", "Path to reward model.")
+flags.DEFINE_bool("debug", False, "Debug mode.")
+flags.DEFINE_bool("fix_latent", True, "Fix latent.")
+flags.DEFINE_integer("label_freq", 10, "Label frequency.")
 
 wandb_config = default_wandb_config()
 wandb_config.update({
@@ -69,6 +77,17 @@ def main(_):
 
     # normalizing_factor = get_normalization(dataset)
     # dataset = dataset.copy({'rewards': dataset['rewards'] / normalizing_factor})
+    if FLAGS.use_reward_model:
+        reward_model = get_reward_model(FLAGS.model_type, FLAGS.ckpt)
+        dataset = relabel_rewards(
+            env,
+            dataset,
+            FLAGS.model_type,
+            reward_model,
+            fix_latent=FLAGS.fix_latent,
+            debug=FLAGS.debug,
+            label_freq=FLAGS.label_freq,
+        )
 
     example_batch = dataset.sample(1)
     agent = learner.create_learner(FLAGS.seed,

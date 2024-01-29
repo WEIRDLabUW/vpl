@@ -86,7 +86,7 @@ def evaluate(
             observation, rew, done, info = env.step(action)
             done = done
             add_to(stats, flatten(info))
-        # add_to(stats, flatten(info, parent_key="final"))
+        add_to(stats, flatten(info, parent_key="final"))
 
     for k, v in stats.items():
         stats[k] = np.mean(v)
