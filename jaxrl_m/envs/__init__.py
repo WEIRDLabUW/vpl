@@ -47,6 +47,18 @@ register(
     },
 )
 
+
+register(
+    id="maze2d-fourrooms2-v0",
+    entry_point="jaxrl_m.envs.four_rooms2:FourRoomsEnv",
+    max_episode_steps=600,
+    kwargs={
+        "dataset_path": os.path.join(
+            os.path.dirname(__file__), "datasets/four_rooms.hdf5"
+        ),
+    },
+)
+
 register(
     id="kitchen-v0",
     entry_point="jaxrl_m.envs.franka_kitchen:FrankaKitchenEnv",

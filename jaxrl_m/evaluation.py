@@ -63,8 +63,9 @@ def evaluate(
     save_video: bool = False,
     render_frame: bool = True,
     name="eval_video",
-    additional_eval_func: Optional[Any] = None,
     reset_kwargs={},
+    latent=None,
+    mode=None
 ) -> Dict[str, float]:
     if save_video:
         env = WANDBVideo(env, name=name, max_videos=1, render_frame=render_frame)
@@ -73,13 +74,19 @@ def evaluate(
     stats = defaultdict(list)
     for i in range(num_episodes):
         observation = env.reset(**reset_kwargs)
+        if mode is not None:
+            env.set_mode(mode)
+        elif hasattr(env, "reset_mode"):
+            env.reset_mode()
         done = False
         while not done:
+            if latent is not None:
+                observation = np.concatenate([observation, latent], axis=-1)
             action = policy_fn(observation)
             observation, rew, done, info = env.step(action)
             done = done
             add_to(stats, flatten(info))
-        add_to(stats, flatten(info, parent_key="final"))
+        # add_to(stats, flatten(info, parent_key="final"))
 
     for k, v in stats.items():
         stats[k] = np.mean(v)
@@ -220,6 +227,7 @@ class EpisodeMonitor(gym.ActionWrapper):
             info["episode"]["length"] = self.episode_length
             info["episode"]["duration"] = time.time() - self.start_time
             info["episode"]["success"] = self.success
+            info["episode"]["actual_success"] = info.get("success", 0.0)
             if hasattr(self, "get_normalized_score"):
                 info["episode"]["normalized_return"] = (
                     self.get_normalized_score(info["episode"]["return"]) * 100.0

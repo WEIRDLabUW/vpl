@@ -103,4 +103,10 @@ class PointMassEnv(MultiModalEnv):
             ax.scatter(target_p[0], target_p[1], s=20, c="red", marker="*")
             if self.fixed_mode:
                 break
-        
+    
+    def get_biased_data(self, set_len):
+        w, l, _ = self.factor_int(set_len*2)
+        obs = np.mgrid[0:1:w*1j, 0:1:l*1j]
+        obs = obs.reshape(obs.shape[0], -1).T
+        # idxs = np.random.permutation(np.arange(obs.shape[0]))
+        return obs[:set_len], np.copy((obs[set_len:])[::-1])

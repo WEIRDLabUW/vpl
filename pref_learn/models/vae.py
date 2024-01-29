@@ -79,7 +79,7 @@ class VAEModel(nn.Module):
 
         self.flow_prior = flow_prior
         if flow_prior:
-            self.flow = Flow(latent_dim, "planar", 4)
+            self.flow = Flow(latent_dim, "radial", 4)
         
         self.kl_weight = kl_weight
         self.annealer = annealer
@@ -182,7 +182,7 @@ class VAEModel(nn.Module):
         if self.learned_prior:
             z = z * torch.exp(0.5*self.log_var) + self.mean
         elif self.flow_prior:
-            z, _ = self.transform(z)
+            z, _ = self.flow(z)
         return z
     
     def sample_posterior(self, s1, s2, y):

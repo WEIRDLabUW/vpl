@@ -89,6 +89,8 @@ def main(_):
 
     exploration_metrics = dict()
     obs = env.reset()
+    if hasattr(env, "reset_mode"):
+        env.reset_mode()
     exploration_rng = jax.random.PRNGKey(0)
 
     for i in tqdm.tqdm(
@@ -119,6 +121,8 @@ def main(_):
                 f"exploration/{k}": v for k, v in flatten(info).items()
             }
             obs = env.reset()
+            if hasattr(env, "reset_mode"):
+                env.reset_mode()
 
         if replay_buffer.size < FLAGS.start_steps:
             continue

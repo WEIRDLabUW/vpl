@@ -51,10 +51,11 @@ class MultiModalEnv(gym.Env):
             return self.env_mode
         return np.random.randint(self.get_num_modes())
 
+    def reset_mode(self):
+        self.env_mode = self.sample_mode()
+    
     def reset(self):
         obs = self.env.reset()
-        if not self.fixed_mode:
-            self.set_mode(self.sample_mode())
         return np.array(obs[:2]) / self.max_x
 
     def step(self, actions):
@@ -66,7 +67,7 @@ class MultiModalEnv(gym.Env):
         return np.array(obs[:2]) / self.max_x, reward, done, info
 
     def get_success(self, state):
-        return np.linalg.norm(state - self.env._target) < 0.5
+        return np.linalg.norm(state - self.env._target) < 1.0
 
     def get_preferences(self, state1, state2):
         raise NotImplementedError()

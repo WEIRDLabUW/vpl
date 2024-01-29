@@ -20,6 +20,8 @@ import pickle
 from flax.training import checkpoints
 
 import d4rl
+from pref_learn.utils.plot_utils import plot_z
+from pref_learn.models.utils import get_biased
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "HalfCheetah-v2", "Environment name.")
@@ -37,6 +39,9 @@ flags.DEFINE_integer("start_steps", int(1e4), "Number of initial exploration ste
 flags.DEFINE_bool("save_video", False, "Save video of evaluation.")
 flags.DEFINE_string("model_type", "MLP", "Path to reward model.")
 flags.DEFINE_string("ckpt", "", "Path to reward model.")
+flags.DEFINE_bool("debug", False, "Debug mode.")
+flags.DEFINE_integer("relabel_freq", 10, "Relabel frequency.")
+flags.DEFINE_bool("fix_latent", True, "Fix latent.")
 
 wandb_config = default_wandb_config()
 wandb_config.update(
@@ -49,19 +54,26 @@ wandb_config.update(
 
 config_flags.DEFINE_config_dict("wandb", wandb_config, lock_config=False)
 config_flags.DEFINE_config_dict(
-    "config", learner.get_default_config(), lock_config=False
+    "config",
+    learner.get_default_config(),
+    "File path to the training hyperparameter configuration.",
+    lock_config=False,
 )
 
 
 def get_reward_model(model_type, ckpt):
     if os.path.isdir(ckpt):
-        models = [f for f in os.listdir(ckpt) if os.path.isfile(os.path.join(ckpt, f)) and f.startswith('model_')]
+        models = [
+            f
+            for f in os.listdir(ckpt)
+            if os.path.isfile(os.path.join(ckpt, f)) and f.startswith("model_")
+        ]
         max_epoch = -1
         max_epoch_model = None
-        
+
         for model in models:
             try:
-                epoch = int(model.split('_')[1].split('.')[0])
+                epoch = int(model.split("_")[1].split(".")[0])
                 if epoch > max_epoch:
                     max_epoch = epoch
                     max_epoch_model = model
@@ -71,10 +83,34 @@ def get_reward_model(model_type, ckpt):
 
     print(f"Loading {model_type} reward model")
     reward_model = torch.load(ckpt)
-    return reward_model
+    return reward_model.to("cuda")
 
 
-def relabel_trajectory(trajectory, reward_model, model_type):
+import matplotlib.cm as cm
+import matplotlib
+import matplotlib.pyplot as plt
+
+
+def plot_train_values(obs, r):
+    fig, ax = plt.subplots()
+    # _, NX, NY, target_p = gym_env.get_obs_grid()
+    r = (r - r.min()) / (r.max() - r.min())
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=1, clip=True)
+    #
+    # obs1 = torch.concatenate((obs1, obs2), axis=0).view(-1, 2)
+    # r1 = torch.concatenate((r1, r2), axis=0).flatten()
+
+    ax.scatter(obs[:, 0], obs[:, 1], c=cm.bwr(norm(r)))
+    sm = cm.ScalarMappable(cmap=cm.bwr, norm=norm)
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax)
+    cb.set_label("r(s)")
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    return fig
+
+fixed_z = None
+def relabel_trajectory(trajectory, reward_model, model_type, env):
     trajectory = (
         torch.from_numpy(trajectory).float().to(next(reward_model.parameters()).device)
     )
@@ -84,10 +120,36 @@ def relabel_trajectory(trajectory, reward_model, model_type):
         elif model_type == "Categorical" or model_type == "MeanVar":
             rewards = reward_model.sample_reward(trajectory)
         else:
-            z = reward_model.sample_prior(size=1).repeat(trajectory.shape[0], 1)
-            trajectory = torch.cat([trajectory, z], dim=-1)
-            rewards = reward_model.get_reward(trajectory)
+            global fixed_z
+            if fixed_z is None:
+                fixed_z = (
+                    torch.from_numpy(get_biased(env, reward_model)[0])
+                    .float()
+                    .to(next(reward_model.parameters()).device)
+                )
+            if FLAGS.fix_latent:
+                z = fixed_z.repeat(trajectory.shape[0], 1)
+            else:
+                z = reward_model.sample_prior(size=1).repeat(trajectory.shape[0], 1)
+            with torch.no_grad():
+                trajectory = torch.cat([trajectory, z], dim=-1)
+                rewards = reward_model.get_reward(trajectory)
+
+            if FLAGS.debug:
+                n = env.get_num_modes()
+                temp_z = z[0, None].repeat(n, 0).view(n, -1, z.shape[-1]).cpu().numpy()
+                fig1 = plot_z(env, reward_model, temp_z)
+                fig2 = plot_train_values(
+                    trajectory[:, 0:2].cpu().numpy(), rewards.cpu().numpy()
+                )
+                wandb.log(
+                    dict(z_plot=wandb.Image(fig1), train_values=wandb.Image(fig2))
+                )
+                # plt.close(fig1)
+                # plt.close(fig2)
+
     return rewards.cpu().numpy()
+
 
 def main(_):
     # Create wandb logger
@@ -133,6 +195,7 @@ def main(_):
     exploration_rng = jax.random.PRNGKey(0)
 
     trajectory = defaultdict(list)
+    trajectory_counter = 0
     for i in tqdm.tqdm(
         range(1, FLAGS.max_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
@@ -145,32 +208,36 @@ def main(_):
         next_obs, reward, done, info = env.step(action)
         mask = float(not done or "TimeLimit.truncated" in info)
 
-        trajectory['observations'].append(obs)
-        trajectory['actions'].append(action)
-        trajectory['rewards'].append(reward)
-        trajectory['masks'].append(mask)
-        trajectory['next_observations'].append(next_obs)
+        trajectory["observations"].append(obs)
+        trajectory["actions"].append(action)
+        trajectory["rewards"].append(reward)
+        trajectory["masks"].append(mask)
+        trajectory["next_observations"].append(next_obs)
         obs = next_obs
 
         if done:
             exploration_metrics = {
                 f"exploration/{k}": v for k, v in flatten(info).items()
             }
-            observations = np.array(trajectory['observations'])
-            trajectory['rewards'] = relabel_trajectory(observations, reward_model, FLAGS.model_type)
-            for i in range(len(trajectory['observations'])):
-                replay_buffer.add_transition(
-                    dict(
-                        observations=trajectory['observations'][i],
-                        actions=trajectory['actions'][i],
-                        rewards=trajectory['rewards'][i],
-                        masks=trajectory['masks'][i],
-                        next_observations=trajectory['next_observations'][i],
-                    )
+            trajectory_counter += 1
+            observations = np.array(trajectory["observations"])
+            if trajectory_counter % FLAGS.relabel_freq == 0:
+                trajectory["rewards"] = relabel_trajectory(
+                    observations, reward_model, FLAGS.model_type, env
                 )
-            
+                for i in range(len(trajectory["observations"])):
+                    replay_buffer.add_transition(
+                        dict(
+                            observations=trajectory["observations"][i],
+                            actions=trajectory["actions"][i],
+                            rewards=trajectory["rewards"][i],
+                            masks=trajectory["masks"][i],
+                            next_observations=trajectory["next_observations"][i],
+                        )
+                    )
+                trajectory = defaultdict(list)
+
             obs = env.reset()
-            trajectory = defaultdict(list)
 
         if replay_buffer.size < FLAGS.start_steps:
             continue

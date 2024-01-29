@@ -172,3 +172,6 @@ class FourRoomsEnv(MultiModalEnv):
             160,
             (self.env._target[0] * 10, self.env._target[1] * 10),
         )
+
+    def get_success(self, state):
+        return np.linalg.norm(state - self.env._target) < 1.0

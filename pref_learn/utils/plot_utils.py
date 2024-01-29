@@ -56,6 +56,8 @@ def plot_mlp(env, reward_model, train_obs=None, train_r=None):
     plt.close(fig)
     # if train_obs:
     #     plot_dict.update(plot_observation_rewards(train_obs, train_r))
+    if hasattr(env, "plot_gt"):
+        plot_dict["gt"] = env.plot_gt(wandb_log=True)
     return plot_dict
 
 
