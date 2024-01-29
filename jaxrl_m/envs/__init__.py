@@ -65,3 +65,23 @@ register(
         "fixed_mode": True,
     },
 )
+
+register(
+    id="kitchen-dense-v0",
+    entry_point="jaxrl_m.envs.franka_kitchen_dense:FrankaKitchenDenseEnv",
+    max_episode_steps=280,
+    kwargs={
+        "dataset_path": os.path.join(os.path.dirname(__file__), "datasets/kitchen.hdf5")
+    },
+)
+
+register(
+    id="kitchen-dense-fixed-v0",
+    entry_point="jaxrl_m.envs.franka_kitchen_dense:FrankaKitchenDenseEnv",
+    max_episode_steps=280,
+    kwargs={
+        "dataset_path": os.path.join(os.path.dirname(__file__), "datasets/kitchen.hdf5"),
+        "fixed_mode": True,
+    },
+)
+

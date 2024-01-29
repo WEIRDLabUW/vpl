@@ -36,7 +36,7 @@ def test_env(env_name):
     print("\n\nTesting step")
     env.reset()
     for _ in range(100):
-        env.render(mode="human")
+        env.render(mode="rgb_array")
         env.step(env.action_space.sample())
         
     env.close()

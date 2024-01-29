@@ -109,7 +109,7 @@ class FrankaKitchenEnv(MultiModalEnv):
                 )
                 < OBJECT_THRESH[task]
             )
-            tasks_distance = np.linalg.norm(
+            tasks_distance = -np.linalg.norm(
                 state[:, :, OBS_ELEMENT_INDICES[task]] - OBS_ELEMENT_GOALS[task],
                 axis=-1,
             )
