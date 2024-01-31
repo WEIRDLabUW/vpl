@@ -23,7 +23,7 @@ class MultiModalEnv(gym.Env):
     """
 
     def __init__(self, dataset_path=None, fixed_mode=False, **kwargs):
-        super(MultiModalEnv, self).__init__(**kwargs)
+        super(MultiModalEnv, self).__init__()
         self.dataset_path = dataset_path
         self.fixed_mode = fixed_mode
         self.env_mode = kwargs.get("env_mode", 0)

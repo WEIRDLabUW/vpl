@@ -76,6 +76,7 @@ def point_maze(maze_str):
                                size=[0.5,0.5,0.2])
 
     actuator = mjcmodel.root.actuator()
+
     actuator.motor(joint="ball_x", ctrlrange=[-1.0, 1.0], ctrllimited=True, gear=100)
     actuator.motor(joint="ball_y", ctrlrange=[-1.0, 1.0], ctrllimited=True, gear=100)
 
@@ -172,7 +173,7 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
 
         model = point_maze(maze_spec)
         with model.asfile() as f:
-            mujoco_env.MujocoEnv.__init__(self, model_path=f.name, frame_skip=1)
+            mujoco_env.MujocoEnv.__init__(self, model_path=f.name, frame_skip=3)
         utils.EzPickle.__init__(self)
 
         # Set the default goal (overriden by a call to set_target)
@@ -190,7 +191,7 @@ class MazeEnv(mujoco_env.MujocoEnv, utils.EzPickle, offline_env.OfflineEnv):
     def step(self, action):
         action = np.clip(action, -1.0, 1.0)
         self.clip_velocity()
-        self.do_simulation(action, self.frame_skip)
+        self.do_simulation(action, 3) # TODO: Unhack this
         self.set_marker()
         ob = self._get_obs()
         if self.reward_type == 'sparse':

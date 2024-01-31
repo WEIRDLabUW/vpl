@@ -31,6 +31,8 @@ GATE4 = np.array([6, 3])
 def mode1_fn(x, y):
     x_, y_ = x - 6, y - 6
     
+    # return -np.linalg.norm(np.array([x, y]) - GATE1)
+
     if x_ < 0:
         if y_ < 0:
             d1 = -np.linalg.norm(np.array([x, y]) - GATE1)
@@ -40,7 +42,7 @@ def mode1_fn(x, y):
         else:
             d1 = -np.linalg.norm(np.array([x, y]) - GATE2)
             d2 = -np.linalg.norm(GATE2 - TARGET)
-            return d1 + d2
+            return d1 + d2 + 5
     else:
         if y_ < 0:
             d1 = -np.linalg.norm(np.array([x, y]) - GATE4)
@@ -49,11 +51,16 @@ def mode1_fn(x, y):
             d4 = -np.linalg.norm(GATE2 - TARGET)
             return d1 + d2 + d3 + d4
         else:
-            return -np.linalg.norm(np.array([x, y]) - TARGET)
+            if np.linalg.norm(np.array([x, y]) - TARGET) < 0.5:
+                bonus = 100
+            else:
+                bonus = 0
+            return -np.linalg.norm(np.array([x, y]) - TARGET) + 20 + bonus
 
 def mode2_fn(x, y):
     x_, y_ = x - 6, y - 6
-
+    # assert False, "issue"
+    # return -np.linalg.norm(np.array([x, y]) - GATE1)
     if x_ < 0:
         if y_ < 0:
             d1 = -np.linalg.norm(np.array([x, y]) - GATE4)
@@ -70,10 +77,21 @@ def mode2_fn(x, y):
         if y_ < 0:
             d1 = -np.linalg.norm(np.array([x, y]) - GATE3)
             d2 = -np.linalg.norm(GATE3 - TARGET)
-            return d1 + d2
+            return d1 + d2 + 5
         else:
-            return -np.linalg.norm(np.array([x, y]) - TARGET)
+            if np.linalg.norm(np.array([x, y]) - TARGET) < 0.5:
+                bonus = 100
+            else:
+                bonus = 0
+            return -np.linalg.norm(np.array([x, y]) - TARGET) + 20 + bonus
 
+def sparsegoalreward(x, y):
+    # import ipdb; ipdb.set_trace()
+    if np.linalg.norm(np.array([x, y]) - TARGET) < 2.5:
+        bonus = 100
+    else:
+        bonus = 0
+    return bonus
 
 vec_mode1 = np.vectorize(mode1_fn)
 vec_mode2 = np.vectorize(mode2_fn)
@@ -110,6 +128,8 @@ class FourRoomsEnv(MultiModalEnv):
         obs, reward, done, info = self.env.step(actions)
         info["task_metric"] = self.get_success(obs[:2])
         reward = self.get_reward(obs[None, None, :2], self.env_mode)[0,0]
+        # import ipdb; ipdb.set_trace()
+        # reward = sparsegoalreward(obs[0], obs[1])
         return obs, reward, done, info
     
     def get_preference_rewards(
