@@ -46,7 +46,7 @@ flags.DEFINE_bool("fix_latent", True, "Fix latent.")
 wandb_config = default_wandb_config()
 wandb_config.update(
     {
-        "project": os.environ.get("WANDB_PROJECT", "sac_test"),
+        "project": os.environ.get("WANDB_PROJECT", "sac_test_new"),
         "group": os.environ.get("WANDB_GROUP", "sac"),
         "name": "sac_{env_name}",
     }
@@ -196,10 +196,10 @@ def main(_):
 
     trajectory = defaultdict(list)
     trajectory_counter = 0
-    for i in tqdm.tqdm(
+    for epoch in tqdm.tqdm(
         range(1, FLAGS.max_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
-        if i < FLAGS.start_steps:
+        if epoch < FLAGS.start_steps:
             action = env.action_space.sample()
         else:
             exploration_rng, key = jax.random.split(exploration_rng)
@@ -245,13 +245,13 @@ def main(_):
         batch = replay_buffer.sample(FLAGS.batch_size)
         agent, update_info = agent.update(batch)
 
-        if i % FLAGS.log_interval == 0:
+        if epoch % FLAGS.log_interval == 0:
             train_metrics = {f"training/{k}": v for k, v in update_info.items()}
-            wandb.log(train_metrics, step=i)
-            wandb.log(exploration_metrics, step=i)
+            wandb.log(train_metrics, step=epoch)
+            wandb.log(exploration_metrics, step=epoch)
             exploration_metrics = dict()
 
-        if i % FLAGS.eval_interval == 0:
+        if epoch % FLAGS.eval_interval == 0:
             policy_fn = partial(supply_rng(agent.sample_actions), temperature=0.0)
             eval_info = evaluate(
                 policy_fn,
@@ -261,10 +261,10 @@ def main(_):
             )
 
             eval_metrics = {f"evaluation/{k}": v for k, v in eval_info.items()}
-            wandb.log(eval_metrics, step=i)
+            wandb.log(eval_metrics, step=epoch)
 
-        if i % FLAGS.save_interval == 0 and FLAGS.save_dir is not None:
-            checkpoints.save_checkpoint(FLAGS.save_dir, agent, i)
+        if epoch % FLAGS.save_interval == 0 and FLAGS.save_dir is not None:
+            checkpoints.save_checkpoint(FLAGS.save_dir, agent, epoch)
 
 
 if __name__ == "__main__":

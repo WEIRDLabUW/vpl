@@ -32,7 +32,7 @@ OBJECT_THRESH = {
 
 class FrankaKitchenEnv(MultiModalEnv):
     def __init__(
-        self, dataset_path, fixed_mode=False, env_mode=None, task_config=["slide cabinet", "microwave"]
+        self, dataset_path, fixed_mode=False, env_mode=None, task_config=["slide cabinet"]
     ):
         super().__init__(dataset_path=dataset_path, fixed_mode=fixed_mode)
 
@@ -42,57 +42,66 @@ class FrankaKitchenEnv(MultiModalEnv):
         self.action_space = self.env.action_space
         print("observation space in kitchen", self.observation_space)
 
-        self.tasks = task_config
-        self.all_task_orders = list(permutations(self.tasks))
-
-        if self.fixed_mode:
-            self.env_task = self.all_task_orders[self.env_mode]
-
+        # self.tasks = ['microwave', 'kettle', 'light switch', 'slide cabinet']
+        # self.all_task_orders = [["microwave", "slide cabinet"], ["slide cabinet", "microwave"]]
+    
+        # if self.fixed_mode:
+        #     self.env_mode = env_mode if env_mode else 0
+        #     # self.env_task = ["slide cabinet"] #self.all_task_orders[self.env_mode]
+        #     self.env_task = ['microwave', 'kettle', 'light switch', 'slide cabinet']
+        #     print("env_task", self.env_task)
+        if env_mode:
+            self.env_task = ["microwave", "slide cabinet"]#["slide cabinet", "microwave"]
+        else:
+            self.env_task = ["slide cabinet", "microwave"]
         self.relabel_offline_reward = True
+        self.order_following = False
 
-    def set_mode(self, mode):
-        super().set_mode(mode)
-        self.env_task = self.all_task_orders[self.env_mode]
+    # def set_mode(self, mode):
+    #     super().set_mode(mode)
+    #     self.env_task = self.all_task_orders[self.env_mode]
+    
+    # def get_env_task(self, mode):
+    #     if self.fixed_mode:
+    #         return self.env_task
+    #     if mode:
+    #         return self.all_task_orders[mode]
+    #     return self.all_task_orders[self.env_mode]
 
     def get_num_modes(self):
-        return len(self.all_task_orders)
+        return 1#len(self.all_task_orders)
 
     def reset(self):
         obs = self.env.reset()
-        if not self.fixed_mode:
-            self.set_mode(self.sample_mode())
+        # if not self.fixed_mode:
+        # self.set_mode(self.sample_mode())
         return obs
 
     def step(self, actions):
         obs, reward, done, info = self.env.step(actions)
-        info["vel"] = obs[2:4]
-        info["success"] = self.get_success(obs)
-        if info["success"] == 1:
-            done = True
+        info = {}
+        # info["vel"] = obs[2:4]
+        # info["success"] = self.get_success(obs)
+        # if info["success"] == 1:
+        #     done = True
         reward = self.get_reward(obs[None, None], self.env_mode)[0, 0]
+        info["task_metric"] = self.get_task_metric(obs)
         return obs, reward, done, info
 
-    def get_success(self, state):
-        return np.array(
-            [
-                np.linalg.norm(
-                    state[OBS_ELEMENT_INDICES[task]] - OBS_ELEMENT_GOALS[task], axis=-1
-                )
-                < OBJECT_THRESH[task]
-                for task in self.tasks
-            ]
-        ).mean()
+    # def get_success(self, state):
 
     def get_reward(self, state, mode):
-        task_order = self.all_task_orders[mode]
-        r = self.get_ri(state, task_order)
+        # if self.fixed_mode:
+        #     task_order = self.env_task
+        # else:
+        #     task_order = self.[mode]
+        r = self.get_ri(state, self.env_task)
         return r
 
     def get_preference_rewards(
         self, state1, state2, mode=None
     ):  # states are pf size B x T x STATE_DIM
-        mode = mode or self.sample_mode()
-        task_order = self.all_task_orders[mode]
+        task_order = self.env_task#self.get_env_task(mode)
         r0 = self.get_ri(state1, task_order)
         r1 = self.get_ri(state2, task_order)
         return r0, r1

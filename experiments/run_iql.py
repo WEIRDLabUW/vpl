@@ -39,6 +39,7 @@ flags.DEFINE_string("ckpt", "", "Path to reward model.")
 flags.DEFINE_bool("debug", False, "Debug mode.")
 flags.DEFINE_bool("fix_latent", True, "Fix latent.")
 flags.DEFINE_integer("label_freq", 10, "Label frequency.")
+flags.DEFINE_bool("add_mode", False, "Add mode to obs." )
 
 wandb_config = default_wandb_config()
 wandb_config.update({
@@ -60,10 +61,37 @@ def get_normalization(dataset):
                 ret = 0
         return (max(returns) - min(returns)) / 1000
 
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+def plot_train_values(batch, i, wandb_log=True):
+    r = batch['rewards']
+    obs = batch['observations'][:, :2]
+    if batch['observations'].shape[-1] > 4:
+        mode= batch['observations'][:, -1]
+    else:
+        mode= np.zeros(obs.shape[0])
+    # import pdb; pdb.set_trace()
+    fig, ax = plt.subplots()
+    r = (r - r.min()) / (r.max() - r.min())
+    norm = matplotlib.colors.Normalize(vmin=0, vmax=1, clip=True)
+    colors = cm.bwr(norm(r))
+    for i in range(obs.shape[0]):
+        ax.scatter(obs[i, 0], obs[i, 1], c=colors[i], marker='o' if mode[i]==1 else '*', s=10)
+    sm = cm.ScalarMappable(cmap=cm.bwr, norm=norm)
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax)
+    cb.set_label("r(s)")
+    # plt.xlim(0, 1)
+    # plt.ylim(0, 1)
+    if wandb_log:
+        return {"train_values": wandb.Image(fig)}
+    plt.savefig("iql_train_values.png")
+
 def main(_):
 
     # Create wandb logger
-    setup_wandb(FLAGS.config.to_dict(), **FLAGS.wandb)
 
     if FLAGS.save_dir is not None:
         FLAGS.save_dir = os.path.join(FLAGS.save_dir, wandb.run.project, wandb.config.exp_prefix, wandb.config.experiment_id)
@@ -73,8 +101,10 @@ def main(_):
             pickle.dump(get_flag_dict(), f)
     
     env = d4rl_utils.make_env(FLAGS.env_name)
-    dataset = d4rl_utils.get_dataset(env)
-
+    dataset = d4rl_utils.get_dataset(env, add_mode=FLAGS.add_mode)
+    plot_train_values(dataset.sample(1000), 0, wandb_log=False)
+    # import pdb; pdb.set_trace()
+    setup_wandb(FLAGS.config.to_dict(), **FLAGS.wandb)
     # normalizing_factor = get_normalization(dataset)
     # dataset = dataset.copy({'rewards': dataset['rewards'] / normalizing_factor})
     if FLAGS.use_reward_model:
@@ -114,9 +144,12 @@ def main(_):
                 env,
                 num_episodes=FLAGS.eval_episodes,
                 save_video=FLAGS.save_video,
+                add_mode=FLAGS.add_mode,
             )
+            fig_dict = plot_train_values(batch, i)
 
             eval_metrics = {f'evaluation/{k}': v for k, v in eval_info.items()}
+            eval_metrics.update(fig_dict)
             wandb.log(eval_metrics, step=i)
 
         if i % FLAGS.save_interval == 0 and FLAGS.save_dir is not None:

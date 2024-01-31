@@ -22,11 +22,11 @@ class MultiModalEnv(gym.Env):
     A MultiModalEnv is a modified Gym environment designed for multi-modal reward tasks.
     """
 
-    def __init__(self, dataset_path=None, fixed_mode=False, **kwargs):
+    def __init__(self, dataset_path=None, fixed_mode=False, env_mode=0, **kwargs):
         super(MultiModalEnv, self).__init__(**kwargs)
         self.dataset_path = dataset_path
         self.fixed_mode = fixed_mode
-        self.env_mode = kwargs.get("env_mode", 0)
+        self.env_mode = env_mode
 
     @property
     def target(self):
@@ -56,16 +56,13 @@ class MultiModalEnv(gym.Env):
     
     def reset(self):
         obs = self.env.reset()
-        return np.array(obs[:2]) / self.max_x
+        return np.array(obs[:2])
 
     def step(self, actions):
         obs, reward, done, info = self.env.step(actions)
-        obs = obs[:2]
-        # info["vel"] = obs[2:4]
         info["task_metric"] = self.get_success(obs)
-        # if self.fixed_mode:
         reward = self.get_reward(obs[None, None], self.env_mode)[0,0]
-        return np.array(obs) / self.max_x, reward, done, info
+        return np.array(obs), reward, done, info
 
     def get_success(self, state):
         return np.linalg.norm(state - self.env._target) < 1.0

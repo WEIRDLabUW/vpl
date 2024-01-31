@@ -160,3 +160,22 @@ register(
         "env_mode": 1
     },
 )
+
+register(
+    id="twogoals-v0",
+    entry_point="jaxrl_m.envs.two_goals:TwoGoalsEnv",
+    max_episode_steps=600,
+    kwargs={
+        "dataset_path": os.path.join(os.path.dirname(__file__), "datasets/maze2d-medium-dense-v1.hdf5")
+    },
+)
+
+register(
+    id="twogoals-fixed-v0",
+    entry_point="jaxrl_m.envs.two_goals:TwoGoalsEnv",
+    max_episode_steps=600,
+    kwargs={
+        "dataset_path": os.path.join(os.path.dirname(__file__), "datasets/maze2d-medium-dense-v1.hdf5"),
+        "fixed_mode": True,
+    },
+)

@@ -17,6 +17,7 @@ def test_env(env_name):
     print("\n\nTesting modes randomization")
     for _ in range(10):
         env.reset()
+        env.reset_mode()
         print("Mode:", env.get_env_mode())
         if hasattr(env, "env_task"):
             print("Task:", env.env_task)
@@ -46,10 +47,12 @@ if __name__ == "__main__":
     envs = [
         # "maze2d-pointmass-fixed-v0",
         # "maze2d-pointmass-v0",
-        # "maze2d-fourrooms-fixed-v0",
+        # "maze2d-fourrooms-fixed-mode0-v0",
+        # "maze2d-fourrooms-fixed-mode1-v0",
         # "maze2d-fourrooms-v0",
-        "multi-kitchen-mixed-v0",
-        "multi-kitchen-mixed-fixed-v0",
+        "twogoals-fixed-v0"
+        # "multi-kitchen-mixed-v0",
+        # "multi-kitchen-mixed-fixed-v0",
     ]
     for env in envs:
         test_env(env)

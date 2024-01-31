@@ -20,7 +20,7 @@ import pickle
 from flax.training import checkpoints
 
 import d4rl
-from pref_learn.utils.plot_utils import plot_z
+from pref_learn.utils.plot_utils import plot_z, plot_mlp, plot_mlp_samples
 from pref_learn.models.utils import get_biased
 
 FLAGS = flags.FLAGS
@@ -114,13 +114,19 @@ def plot_train_values(obs, r):
 
 def relabel_trajectory(observations, reward_model, model_type, env, z, biased_latents):
     observations = (
-        torch.from_numpy(observations)
+        torch.from_numpy(observations[:, :2])
         .float()
         .to(next(reward_model.parameters()).device)
     )
     with torch.no_grad():
         if model_type == "MLP":
-            rewards = reward_model.get_reward(observations[:, 0:2])
+            rewards = reward_model.get_reward(observations)
+            if FLAGS.debug:
+                fig_dict = plot_mlp(env, reward_model)
+                fig_dict["train_values"] = wandb.Image(plot_train_values(
+                    observations[:, 0:2].cpu().numpy(), rewards.cpu().numpy()
+                ))
+                wandb.log(fig_dict)
         elif model_type == "Categorical" or model_type == "MeanVar":
             rewards = reward_model.sample_reward(observations)
         else:

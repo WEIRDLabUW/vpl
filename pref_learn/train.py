@@ -60,6 +60,7 @@ FLAGS_DEF = define_flags_with_default(
     # plotting
     debug_plots=True,
     plot_observations=False,
+    reward_scaling=1.0
 )
 
 
@@ -92,7 +93,10 @@ def main(_):
     gym_env.action_space.seed(FLAGS.seed)
     gym_env.observation_space.seed(FLAGS.seed)
     set_random_seed(FLAGS.seed)
-    observation_dim = gym_env.observation_space.shape[0]
+    if hasattr(gym_env, "reward_observation_space"):
+        observation_dim = gym_env.reward_observation_space.shape[0]
+    else:
+        observation_dim = gym_env.observation_space.shape[0]
     action_dim = gym_env.action_space.shape[0]
 
     (
@@ -142,6 +146,7 @@ def main(_):
             learned_prior=FLAGS.learned_prior,
             flow_prior=FLAGS.flow_prior,
             annealer=annealer,
+            reward_scaling=FLAGS.reward_scaling
         )
     else:
         raise NotImplementedError
@@ -192,7 +197,7 @@ def main(_):
                 metrics.update(prefix_metrics(fig_dict, "debug_plots"))
 
             criteria = np.mean(metrics["eval/loss"])
-            if FLAGS.early_stop and early_stop(criteria):
+            if FLAGS.early_stop and early_stop.early_stop(criteria):
                 log_metrics(metrics, epoch, wb_logger)
                 break
 

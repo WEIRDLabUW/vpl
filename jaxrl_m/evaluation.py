@@ -62,7 +62,8 @@ def evaluate(
     name="eval_video",
     reset_kwargs={},
     latent=None,
-    mode=None
+    mode=None,
+    add_mode=False,
 ) -> Dict[str, float]:
     if save_video:
         env = WANDBVideo(env, name=name, max_videos=1, render_frame=render_frame)
@@ -75,10 +76,15 @@ def evaluate(
             env.set_mode(mode)
         elif hasattr(env, "reset_mode"):
             env.reset_mode()
+            env.unwrapped.env.set_marker()
         done = False
         while not done:
             if latent is not None:
                 observation = np.concatenate([observation, latent], axis=-1)
+            if add_mode:
+                em = env.env_mode
+                observation = np.concatenate([observation, np.array([em, em, em, em])], axis=-1)
+            # import pdb; pdb.set_trace()
             action = policy_fn(observation)
             observation, rew, done, info = env.step(action)
             done = done
@@ -135,6 +141,29 @@ class WANDBVideo(gym.Wrapper):
             return
         if self._render_frame:
             frame = self.render(mode="rgb_array")
+            img = Image.fromarray(frame)
+            l, w, d = frame.shape
+            i1 = ImageDraw.Draw(img)
+            eval_string = f"{action}" if not hasattr(self, "env_mode") else f"{self.env_mode}: {self.unwrapped.env._target}"
+            i1.text(
+                (l // 20, w // 20),
+                # f"{action}",
+                eval_string,
+                # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
+                fill=(255, 255, 255),
+            )
+            frame = np.asarray(img)
+            if hasattr(self, "get_task_string"):
+                img = Image.fromarray(frame)
+                l, w, d = frame.shape
+                i1 = ImageDraw.Draw(img)
+                i1.text(
+                    (l // 20, w // 20),
+                    self.get_task_string(obs),
+                    # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
+                    fill=(255, 255, 255),
+                )
+                frame = np.asarray(img)
             if self._agent:
                 if self._curr_obs is not None:
                     value = self._agent.eval_critic(self._curr_obs, action)
@@ -144,7 +173,7 @@ class WANDBVideo(gym.Wrapper):
                     i1.text(
                         (l // 20, w // 20),
                         "critic: " + str(np.round(value, 3)),
-                        font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
+                        # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
                         fill=(255, 255, 255),
                     )
                     frame = np.asarray(img)
@@ -208,14 +237,14 @@ class EpisodeMonitor(gym.ActionWrapper):
         self.episode_length = 0
         self.start_time = time.time()
         # self.success = 0.0
-        self.task_metric = -1.0
+        self.success = 0.0
 
     def step(self, action: np.ndarray):
         observation, reward, done, info = self.env.step(action)
 
         self.reward_sum += reward
         # self.success = max(self.success, info.get("success", 0.0))
-        self.task_metric = max(self.task_metric, info.get("task_metric", -1.0))
+        self.success = max(self.success, info.get("success", 0.0))
         self.episode_length += 1
         self.total_timesteps += 1
         # info["total"] = {"timesteps": self.total_timesteps}
@@ -224,7 +253,7 @@ class EpisodeMonitor(gym.ActionWrapper):
             info["episode"] = {}
             info["episode"]["return"] = self.reward_sum
             info["episode"]["length"] = self.episode_length
-            info["episode"]["task_metric"] = self.task_metric
+            info["episode"]["success"] = self.success
             # info["episode"]["duration"] = time.time() - self.start_time
             # info["episode"]["success"] = self.success
             # info["episode"]["actual_success"] = info.get("success", 0.0)

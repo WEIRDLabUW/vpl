@@ -59,17 +59,20 @@ def main(_):
                 base_path,
             )
         print("Saved queries at: ", query_path)
-
+    modes = []
     for i in tqdm(range(len(dataset["observations"]))):
+        mode = gym_env.sample_mode()
+        modes.append(mode)
         seg_reward_1, seg_reward_2 = gym_env.get_preference_rewards(
-            dataset["observations"][i], dataset["observations_2"][i]
+            dataset["observations"][i], dataset["observations_2"][i], mode=mode
         )
         dataset["labels"][i] = get_labels(seg_reward_1, seg_reward_2)
 
     relabelled_path = str(query_path).replace("queries", "relabelled_queries")
     with open(relabelled_path, "wb") as f:
         pickle.dump(dataset, f)
-    print("Saved relabelled queries at: ", query_path)
+    print("Saved relabelled queries at: ", relabelled_path)
+    print("Mean mode:", sum(modes) / len(modes))
 
     plot_observations(all_obs, query_path)
 

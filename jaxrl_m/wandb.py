@@ -121,8 +121,6 @@ def setup_wandb(
         tags=tags,
         group=group,
         dir=wandb_output_dir,
-        id=experiment_id,
-        name=name,
         settings=wandb.Settings(
             start_method="thread",
             _disable_stats=False,

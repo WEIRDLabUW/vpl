@@ -51,13 +51,13 @@ def new_get_trj_idx(env, terminate_on_end=False, **kwargs):
 
 def sample_from_env(env, num_query, len_set, len_query, data_dir):
     assert len_query == 1
-    observation_dim = env.observation_space.shape[-1]
+    observation_dim = env.reward_observation_space.shape[-1]
     action_dim = env.action_space.shape[-1]
     seg_obs_1 = np.stack(
-        [env.observation_space.sample() for _ in range(num_query * len_set)], axis=1
+        [env.reward_observation_space.sample() for _ in range(num_query * len_set)], axis=1
     ).reshape(num_query, len_set, len_query, observation_dim)
     seg_obs_2 = np.stack(
-        [env.observation_space.sample() for _ in range(num_query * len_set)], axis=1
+        [env.reward_observation_space.sample() for _ in range(num_query * len_set)], axis=1
     ).reshape(num_query, len_set, len_query, observation_dim)
     seg_act_1 = np.stack(
         [env.action_space.sample() for _ in range(num_query * len_set)], axis=1

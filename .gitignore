@@ -161,4 +161,8 @@ cython_debug/
 
 slurm*/
 pref_datasets
-logs*
+*logs*
+wandb/
+*.png
+debug*
+plot.py

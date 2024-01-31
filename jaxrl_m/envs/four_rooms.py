@@ -163,9 +163,9 @@ class FourRoomsEnv(MultiModalEnv):
 
     def get_obs_grid(self):
         return (
-            np.mgrid[0:1:120j, 0:1:160j],
+            np.mgrid[0:12:120j, 0:12:120j],
             120,
-            160,
+            120,
             (self.env._target[0] * 10, self.env._target[1] * 10),
         )
 
