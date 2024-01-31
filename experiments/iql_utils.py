@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from jaxrl_m.learners.d4rl_utils import get_dataset, split_into_trajectories
-
+from jaxrl_m.dataset import Dataset
 
 def get_reward_model(model_type, ckpt):
     if os.path.isdir(ckpt):
@@ -39,18 +39,21 @@ def relabel_rewards(
     new_rewards = []
     new_obs = []
     trajs = split_into_trajectories(observations, dones_float)
-    if fix_latent:
-        assert NotImplementedError
-    else:
-        z = reward_model.sample_prior(size=1)
+
+    if model_type == "VAE":
+        if fix_latent:
+            assert NotImplementedError
+        else:
+            z = reward_model.sample_prior(size=1)
 
     for i, traj in enumerate(trajs):
         obs = np.array([t[0] for t in traj])
         obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
         if model_type == "MLP":
-            rewards = reward_model.get_reward(obs)
+            with torch.no_grad():
+                rewards = reward_model.get_reward(obs)
         elif model_type == "Categorical" or model_type == "MeanVar":
-            rewards = reward_model.sample_reward(obs)
+                rewards = reward_model.sample_reward(obs)
         else:
             if i % label_freq == 0:
                 if fix_latent:
@@ -82,12 +85,14 @@ def relabel_rewards(
         new_rewards.append(rewards.flatten().cpu().numpy())
         new_obs.append(obs.cpu().numpy())
     new_rewards = np.concatenate(new_rewards)
+    new_rewards = (new_rewards - new_rewards.min()) / (new_rewards.max() - new_rewards.min())
     new_obs = np.concatenate(new_obs)
-    new_dataset = dict(
-        observations=new_obs,
-        actions=dataset["actions"],
-        rewards=new_rewards,
-        dones=dataset["dones"],
-        infos=dataset["infos"],
-    )
-    return new_dataset
+    new_dataset = {
+        "observations": dataset["observations"], #TODO: add z conditioned
+        "actions": dataset["actions"],
+        "rewards": new_rewards,
+        "masks": dataset["masks"],
+        "dones_float": dataset["dones_float"],
+        "next_observations": dataset["next_observations"],
+    }
+    return Dataset(new_dataset)

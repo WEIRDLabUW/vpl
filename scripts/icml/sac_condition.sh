@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=fourrooms_icml
+#SBATCH --job-name=icml_condition
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=sriyash@cs.washington.edu
 
@@ -28,13 +28,13 @@ source ${HOME}/.bashrc
 conda activate offline
 cd $HOME_DIR
 
-export WANDB_PROJECT=icml_$env\_reward_learning_conditioned
+export WANDB_PROJECT=icml_rl2
 dataset_path=icml_datasets/$env/relabelled_queries_num10000_q1_s32
 
 python pref_learn/train.py \
     --comment=$WANDB_PROJECT \
     --env=$env \
-    --dataset_path=$path \
+    --dataset_path=$dataset_path \
     --model_type=$model_type \
     --logging.output_dir="logs" \
     --seed $SLURM_ARRAY_TASK_ID \
@@ -42,9 +42,9 @@ python pref_learn/train.py \
     --use_annealing=True \
 
 
-ckpt_dir="logs/$env/MLP/$WANDB_PROJECT/s$SLURM_ARRAY_TASK_ID"
+ckpt_dir="logs/$env/$model_type/$WANDB_PROJECT/s$SLURM_ARRAY_TASK_ID"
 
-export WANDB_PROJECT=icml_$env\_policy_conditioned
+export WANDB_PROJECT=icml_zcondition
 
 python experiments/run_sac_conditioned.py \
         --env_name $env \

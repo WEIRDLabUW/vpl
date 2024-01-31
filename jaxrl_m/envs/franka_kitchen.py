@@ -32,7 +32,7 @@ OBJECT_THRESH = {
 
 class FrankaKitchenEnv(MultiModalEnv):
     def __init__(
-        self, dataset_path, fixed_mode=False, task_config=["slide cabinet", "microwave"]
+        self, dataset_path, fixed_mode=False, env_mode=None, task_config=["slide cabinet", "microwave"]
     ):
         super().__init__(dataset_path=dataset_path, fixed_mode=fixed_mode)
 

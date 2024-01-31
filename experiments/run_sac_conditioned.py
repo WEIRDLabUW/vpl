@@ -161,6 +161,7 @@ def main(_):
     eval_env = EpisodeMonitor(gym.make(FLAGS.env_name))
 
     reward_model = get_reward_model(FLAGS.model_type, FLAGS.ckpt)
+    biased_latents = None
     if FLAGS.model_type == "VAE":
         biased_latents = get_biased(env, reward_model)
 

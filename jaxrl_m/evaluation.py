@@ -13,9 +13,6 @@ import wandb
 from PIL import Image, ImageDraw, ImageFont
 from typing import Dict, Optional, Any
 
-import gym
-import numpy as np
-
 
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
     """
@@ -210,28 +207,31 @@ class EpisodeMonitor(gym.ActionWrapper):
         self.reward_sum = 0.0
         self.episode_length = 0
         self.start_time = time.time()
-        self.success = 0.0
+        # self.success = 0.0
+        self.task_metric = -1.0
 
     def step(self, action: np.ndarray):
         observation, reward, done, info = self.env.step(action)
 
         self.reward_sum += reward
-        self.success = max(self.success, info.get("success", 0.0))
+        # self.success = max(self.success, info.get("success", 0.0))
+        self.task_metric = max(self.task_metric, info.get("task_metric", -1.0))
         self.episode_length += 1
         self.total_timesteps += 1
-        info["total"] = {"timesteps": self.total_timesteps}
+        # info["total"] = {"timesteps": self.total_timesteps}
 
         if done:
             info["episode"] = {}
             info["episode"]["return"] = self.reward_sum
             info["episode"]["length"] = self.episode_length
-            info["episode"]["duration"] = time.time() - self.start_time
-            info["episode"]["success"] = self.success
-            info["episode"]["actual_success"] = info.get("success", 0.0)
-            if hasattr(self, "get_normalized_score"):
-                info["episode"]["normalized_return"] = (
-                    self.get_normalized_score(info["episode"]["return"]) * 100.0
-                )
+            info["episode"]["task_metric"] = self.task_metric
+            # info["episode"]["duration"] = time.time() - self.start_time
+            # info["episode"]["success"] = self.success
+            # info["episode"]["actual_success"] = info.get("success", 0.0)
+            # if hasattr(self, "get_normalized_score"):
+            #     info["episode"]["normalized_return"] = (
+            #         self.get_normalized_score(info["episode"]["return"]) * 100.0
+            #     )
 
         return observation, reward, done, info
 

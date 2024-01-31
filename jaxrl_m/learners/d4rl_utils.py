@@ -43,6 +43,7 @@ def get_dataset(
     }
 
     if hasattr(env, "relabel_offline_reward") and env.relabel_offline_reward:
+        print("RELABELING REWARDS")
         dataset["rewards"] = relabel_rewards(
             env, dataset["observations"], dataset["dones_float"]
         )
@@ -68,4 +69,6 @@ def relabel_rewards(env, observations, dones_float):
     for traj in trajs:
         obs = np.array([t[0] for t in traj])
         new_rewards.extend(env.get_reward(obs[None], env.sample_mode())[0])
-    return np.array(new_rewards)
+    new_rewards = np.array(new_rewards)
+    normalised_rewards = (new_rewards - new_rewards.min()) / (new_rewards.max() - new_rewards.min())
+    return normalised_rewards

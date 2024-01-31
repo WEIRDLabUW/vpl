@@ -24,7 +24,7 @@ FLAGS_DEF = define_flags_with_default(
     env="maze2d-target-v0",  # can change
     comment="",
     data_seed=42,
-    batch_size=64,
+    batch_size=256,
     early_stop=False,
     min_delta=3e-4,
     patience=10,
@@ -157,8 +157,8 @@ def main(_):
 
         for batch in train_loader:
             optimizer.zero_grad()
-            observations = batch["observations"].to(device)
-            observations_2 = batch["observations_2"].to(device)
+            observations = batch["observations"].to(device).float()
+            observations_2 = batch["observations_2"].to(device).float()
             labels = batch["labels"].to(device).float()
             loss, batch_metrics = reward_model(observations, observations_2, labels)
             loss.backward()
@@ -170,8 +170,8 @@ def main(_):
         if epoch % FLAGS.eval_freq == 0:
             for batch in test_loader:
                 with torch.no_grad():
-                    observations = batch["observations"].to(device)
-                    observations_2 = batch["observations_2"].to(device)
+                    observations = batch["observations"].to(device).float()
+                    observations_2 = batch["observations_2"].to(device).float()
                     labels = batch["labels"].to(device).float()
                     loss, batch_metrics = reward_model(
                         observations, observations_2, labels
@@ -189,7 +189,7 @@ def main(_):
                     fig_dict = putils.plot_vae(gym_env, reward_model, eval_dataset)
                 # import pdb; pdb.set_trace()
 
-            metrics.update(prefix_metrics(fig_dict, "debug_plots"))
+                metrics.update(prefix_metrics(fig_dict, "debug_plots"))
 
             criteria = np.mean(metrics["eval/loss"])
             if FLAGS.early_stop and early_stop(criteria):
@@ -199,7 +199,7 @@ def main(_):
         if epoch % FLAGS.save_freq == 0:
             torch.save(reward_model, save_dir + f"/model_{epoch}.pt")
 
-        if FLAGS.use_annealing:
+        if FLAGS.model_type=="VAE" and FLAGS.use_annealing:
             reward_model.annealer.step()
 
         log_metrics(metrics, epoch, wb_logger)

@@ -116,7 +116,7 @@ def relabel_trajectory(trajectory, reward_model, model_type, env):
     )
     with torch.no_grad():
         if model_type == "MLP":
-            rewards = reward_model.get_reward(trajectory[:, 0:2])
+            rewards = reward_model.get_reward(trajectory)
         elif model_type == "Categorical" or model_type == "MeanVar":
             rewards = reward_model.sample_reward(trajectory)
         else:
@@ -137,7 +137,7 @@ def relabel_trajectory(trajectory, reward_model, model_type, env):
 
             if FLAGS.debug:
                 n = env.get_num_modes()
-                temp_z = z[0, None].repeat(n, 0).view(n, -1, z.shape[-1]).cpu().numpy()
+                temp_z = z[0, None].repeat(n, 1).view(n, -1, z.shape[-1]).cpu().numpy()
                 fig1 = plot_z(env, reward_model, temp_z)
                 fig2 = plot_train_values(
                     trajectory[:, 0:2].cpu().numpy(), rewards.cpu().numpy()

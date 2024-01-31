@@ -14,7 +14,7 @@ from jaxrl_m.evaluation import supply_rng, evaluate
 from ml_collections import config_flags
 import pickle
 from flax.training import checkpoints
-from .iql_utils import get_reward_model, relabel_rewards
+from iql_utils import get_reward_model, relabel_rewards
 
 import d4rl
 

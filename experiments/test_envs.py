@@ -48,8 +48,8 @@ if __name__ == "__main__":
         # "maze2d-pointmass-v0",
         # "maze2d-fourrooms-fixed-v0",
         # "maze2d-fourrooms-v0",
-        "kitchen-v0",
-        "kitchen-fixed-v0",
+        "multi-kitchen-mixed-v0",
+        "multi-kitchen-mixed-fixed-v0",
     ]
     for env in envs:
         test_env(env)
