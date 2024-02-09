@@ -37,7 +37,7 @@ def plot_observation_rewards(obs, r):
     cb = fig.colorbar(sm, ax=ax)
     cb.set_label("r(s)")
     plt.close(fig)
-    return dict(observation_reward_plot=wandb.Image(fig))
+    return fig
 
 
 def plot_mlp(env, reward_model, train_obs=None, train_r=None):
@@ -156,6 +156,7 @@ def plot_z(env, reward_model, latents):
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
 
     axs = axs.flatten()
+    scale = None
     for mode_n in range(modes_n):
         for i in range(num_samples):
             ax = axs[mode_n * num_samples + i]
@@ -163,15 +164,15 @@ def plot_z(env, reward_model, latents):
             z = np.repeat(z, obs.shape[0], axis=0)
             z = torch.from_numpy(z).float().to(next(reward_model.parameters()).device)
             r = reward_model.decode(obs, z).detach().cpu().numpy().reshape((NX, NY))
+            scale = (r.min(), r.max()-r.min())
             r = (r - r.min()) / (r.max() - r.min())
-            if i > num_samples // 2:
-                r = np.exp(r)
+            r = np.exp(r)
             ax.imshow(r.T, cmap="viridis", interpolation="nearest", origin="lower")
             plot_goals(env, ax, target_p, scale=50)
             ax.set_title(f"Mode {mode_n}")
     plt.tight_layout()
     plt.close(fig)
-    return wandb.Image(fig)
+    return wandb.Image(fig), scale
 
 
 def plot_vae(env, reward_model, dataset, num_samples=4, train_obs=None, train_r=None):
@@ -189,6 +190,8 @@ def plot_vae(env, reward_model, dataset, num_samples=4, train_obs=None, train_r=
 
     posterior_latents = get_all_posterior(env, reward_model, dataset, num_samples)
     biased_latents = get_biased(env, reward_model)
+
+    reward_model.update_posteriors(posterior_latents, biased_latents)
 
     plot_dict["prior"] = plot_z(env, reward_model, prior_latents)
     plot_dict["posterior"] = plot_z(env, reward_model, posterior_latents)
