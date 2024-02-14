@@ -1,3 +1,4 @@
+import math
 import gym
 import numpy as np
 import d4rl
@@ -9,6 +10,9 @@ class MazeEnv(gym.Env):
         self.env = gym.make("maze2d-large-v1")
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
+        self.reward_observation_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=(2,)
+        )
         self._max_episode_steps = self.env._max_episode_steps
 
         self.mode = mode
@@ -19,20 +23,18 @@ class MazeEnv(gym.Env):
     @property
     def target(self):
         return self.env._target
-    
+
     def get_dataset(self):
         return self.env.get_dataset()
-    
+
     def reset(self):
-        self._elapsed_steps = 0
         return self.env.reset()
 
     def step(self, action):
         # Compute shaped reward
-        obs, reward, _, info = self.env.step(action)
+        obs, reward, done, info = self.env.step(action)
         # Override environment termination
-        done = self._elapsed_steps >= self.env._max_episode_steps
-        self._elapsed_steps += 1
+        info["success"] = -np.linalg.norm(obs[:2] - self.goals[self.mode]) < 0.5
         return obs, reward, done, info
 
     def compute_reward(self, obs, mode):
@@ -59,7 +61,7 @@ class MazeEnv(gym.Env):
             np.linspace(*(0, 8), 100), np.linspace(*(0, 11), 100), indexing="ij"
         )
         points = np.concatenate([xv.reshape(-1, 1), yv.reshape(-1, 1)], axis=1)[None]
-        r = [self.compute_reward(points, g) for g in self.goals]
+        r = [self.compute_reward(points, mode) for mode in range(self.get_num_modes())]
         fig, axs = plt.subplots(1, 2, figsize=(10, 8))
         axs_flat = axs.flatten()
         for i, ax in enumerate(axs_flat):
@@ -69,7 +71,7 @@ class MazeEnv(gym.Env):
                 interpolation="nearest",
                 origin="lower",
             )
-            self.plot_goals(ax, 100)
+            # self.plot_goals(ax)
         plt.tight_layout()
         if wandb_log:
             return wandb.Image(fig)
@@ -78,7 +80,7 @@ class MazeEnv(gym.Env):
         plt.close(fig)
 
     def plot_goals(self, ax):
-        for g in self.get_goals():
+        for g in self.goals:
             ax.scatter(g[0], g[1], s=20, c="red", marker="*")
 
     def get_biased_data(self, set_len):
@@ -92,16 +94,18 @@ class MazeEnv(gym.Env):
         obs = np.mgrid[0:8:50j, 0:11:50j]
         obs = obs.reshape(obs.shape[0], -1).T
         return obs
-    
+
     def get_goals(self):
-        return (self.goals/np.array([8, 11]))*50
+        return (self.goals / np.array([8, 11])) * 50
 
     def render(self, mode="rgb_array"):
         return self.env.render(mode)
 
     ## Functions to handle multimodality
     def get_num_modes(self):
-        return 2
+        if self.is_multimodal:
+            return 2
+        return 1
 
     def sample_mode(self):
         if self.is_multimodal:
@@ -112,5 +116,14 @@ class MazeEnv(gym.Env):
         self.set_mode(self.sample_mode())
 
     def set_mode(self, mode):
-        self.mode = mode
-        self.env.set_target(self.goals[mode])
+        if self.is_multimodal:
+            self.mode = mode
+            self.env.set_target(self.goals[mode])
+
+    def factor_int(self, n):
+        val = math.ceil(math.sqrt(n))
+        val2 = int(n / val)
+        while val2 * val != float(n):
+            val -= 1
+            val2 = int(n / val)
+        return val, val2, n

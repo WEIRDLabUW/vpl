@@ -7,6 +7,7 @@ import time
 from typing import Optional, Sequence
 from collections import OrderedDict
 import gym
+from gym.wrappers import RecordEpisodeStatistics
 import numpy as np
 import sys
 import wandb
@@ -64,35 +65,35 @@ def evaluate(
     latent=None,
     mode=None,
     add_mode=False,
+    return_stats= False,
 ) -> Dict[str, float]:
     if save_video:
         env = WANDBVideo(env, name=name, max_videos=1, render_frame=render_frame)
-    env = EpisodeMonitor(env)
+    env = RecordEpisodeStatistics(env)
 
     stats = defaultdict(list)
     for i in range(num_episodes):
         observation = env.reset(**reset_kwargs)
         if mode is not None:
             env.set_mode(mode)
-        elif hasattr(env, "reset_mode"):
+        else:
             env.reset_mode()
-            env.unwrapped.env.set_marker()
         done = False
         while not done:
             if latent is not None:
                 observation = np.concatenate([observation, latent], axis=-1)
             if add_mode:
-                em = env.env_mode
-                observation = np.concatenate([observation, np.array([em, em, em, em])], axis=-1)
-            # import pdb; pdb.set_trace()
+                em = env.mode
+                observation = np.concatenate([observation, np.array([em])], axis=-1)
             action = policy_fn(observation)
             observation, rew, done, info = env.step(action)
             done = done
             add_to(stats, flatten(info))
         add_to(stats, flatten(info, parent_key="final"))
 
-    for k, v in stats.items():
-        stats[k] = np.mean(v)
+    if not return_stats:
+        for k, v in stats.items():
+                stats[k] = np.mean(v)
     return stats
 
 
@@ -140,26 +141,14 @@ class WANDBVideo(gym.Wrapper):
         if self._max_videos is not None and self._max_videos <= 0:
             return
         if self._render_frame:
-            frame = self.render(mode="rgb_array")
-            img = Image.fromarray(frame)
-            l, w, d = frame.shape
-            i1 = ImageDraw.Draw(img)
-            eval_string = f"{action}" if not hasattr(self, "env_mode") else f"{self.env_mode}: {self.unwrapped.env._target}"
-            i1.text(
-                (l // 20, w // 20),
-                # f"{action}",
-                eval_string,
-                # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
-                fill=(255, 255, 255),
-            )
             frame = np.asarray(img)
-            if hasattr(self, "get_task_string"):
+            if hasattr(self, "target"):
                 img = Image.fromarray(frame)
                 l, w, d = frame.shape
                 i1 = ImageDraw.Draw(img)
                 i1.text(
                     (l // 20, w // 20),
-                    self.get_task_string(obs),
+                    self.target,
                     # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
                     fill=(255, 255, 255),
                 )
@@ -224,46 +213,46 @@ class WANDBVideo(gym.Wrapper):
         return obs, reward, done, info
 
 
-class EpisodeMonitor(gym.ActionWrapper):
-    """A class that computes episode returns and lengths."""
+# class EpisodeMonitor(gym.ActionWrapper):
+#     """A class that computes episode returns and lengths."""
 
-    def __init__(self, env: gym.Env):
-        super().__init__(env)
-        self._reset_stats()
-        self.total_timesteps = 0
+#     def __init__(self, env: gym.Env):
+#         super().__init__(env)
+#         self._reset_stats()
+#         self.total_timesteps = 0
 
-    def _reset_stats(self):
-        self.reward_sum = 0.0
-        self.episode_length = 0
-        self.start_time = time.time()
-        # self.success = 0.0
-        self.success = 0.0
+#     def _reset_stats(self):
+#         self.reward_sum = 0.0
+#         self.episode_length = 0
+#         self.start_time = time.time()
+#         # self.success = 0.0
+#         self.success = 0.0
 
-    def step(self, action: np.ndarray):
-        observation, reward, done, info = self.env.step(action)
+#     def step(self, action: np.ndarray):
+#         observation, reward, done, info = self.env.step(action)
 
-        self.reward_sum += reward
-        # self.success = max(self.success, info.get("success", 0.0))
-        self.success = max(self.success, info.get("success", 0.0))
-        self.episode_length += 1
-        self.total_timesteps += 1
-        # info["total"] = {"timesteps": self.total_timesteps}
+#         self.reward_sum += reward
+#         self.success = max(self.success, info.get("success", 0.0))
+#         self.success = max(self.success, info.get("success", 0.0))
+#         self.episode_length += 1
+#         self.total_timesteps += 1
+#         info["total"] = {"timesteps": self.total_timesteps}
+#         info = {}
+#         if done:
+#             info["episode"] = {}
+#             info["episode"]["return"] = self.reward_sum
+#             info["episode"]["length"] = self.episode_length
+#             info["episode"]["success"] = self.success
+#             info["episode"]["duration"] = time.time() - self.start_time
+#             info["episode"]["success"] = self.success
+#             info["episode"]["actual_success"] = info.get("success", 0.0)
+#             if hasattr(self, "get_normalized_score"):
+#                 info["episode"]["normalized_return"] = (
+#                     self.get_normalized_score(info["episode"]["return"]) * 100.0
+#                 )
 
-        if done:
-            info["episode"] = {}
-            info["episode"]["return"] = self.reward_sum
-            info["episode"]["length"] = self.episode_length
-            info["episode"]["success"] = self.success
-            # info["episode"]["duration"] = time.time() - self.start_time
-            # info["episode"]["success"] = self.success
-            # info["episode"]["actual_success"] = info.get("success", 0.0)
-            # if hasattr(self, "get_normalized_score"):
-            #     info["episode"]["normalized_return"] = (
-            #         self.get_normalized_score(info["episode"]["return"]) * 100.0
-            #     )
+#         return observation, reward, done, info
 
-        return observation, reward, done, info
-
-    def reset(self) -> np.ndarray:
-        self._reset_stats()
-        return self.env.reset()
+#     def reset(self) -> np.ndarray:
+#         self._reset_stats()
+#         return self.env.reset()
