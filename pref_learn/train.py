@@ -33,7 +33,7 @@ FLAGS_DEF = define_flags_with_default(
     # MLP
     hidden_dim=256,
     # Categorical
-    num_atoms=51,
+    num_atoms=10,
     r_min=0,
     r_max=1,
     entropy_coeff=0.1,
@@ -155,7 +155,7 @@ def main(_):
     reward_model = reward_model.to(device)
     optimizer = torch.optim.Adam(reward_model.parameters(), lr=FLAGS.lr)
     early_stop = EarlyStopper(FLAGS.patience, FLAGS.min_delta)
-
+    best_criteria = None
     for epoch in range(FLAGS.n_epochs):
         metrics = defaultdict(list)
         metrics["epoch"] = epoch
@@ -197,8 +197,18 @@ def main(_):
                 metrics.update(prefix_metrics(fig_dict, "debug_plots"))
 
             criteria = np.mean(metrics["eval/loss"])
+
+            if best_criteria is None:
+                best_criteria = criteria
+                torch.save(reward_model, save_dir + f"/best_model.pt")
+
+            if criteria < best_criteria:
+                torch.save(reward_model, save_dir + f"/best_model.pt")
+                best_criteria = criteria
+
             if FLAGS.early_stop and early_stop.early_stop(criteria):
                 log_metrics(metrics, epoch, wb_logger)
+                torch.save(reward_model, save_dir + f"/model_{epoch}.pt")
                 break
 
         if epoch % FLAGS.save_freq == 0:

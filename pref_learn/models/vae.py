@@ -191,3 +191,7 @@ class VAEModel(nn.Module):
         mean, log_var = self.encode(s1, s2, y)
         z = self.reparameterization(mean, torch.exp(0.5 * log_var))
         return mean, log_var, z
+    
+    def update_posteriors(self, posteriors, biased_latents):
+        self.posteriors = posteriors
+        self.biased_latents = biased_latents
