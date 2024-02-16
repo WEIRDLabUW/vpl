@@ -5,13 +5,13 @@ from tqdm import tqdm
 import torch
 
 from jaxrl_m.dataset import Dataset
-from jaxrl_m.evaluation import EpisodeMonitor
 
 
 def make_env(env_name: str):
     env = gym.make(env_name)
-    env = EpisodeMonitor(env)
+    env = gym.wrappers.RecordEpisodeStatistics(env)
     return env
+
 
 def get_dataset(
     env: gym.Env,
@@ -21,18 +21,21 @@ def get_dataset(
     use_reward_model: bool = False,
     model_type: str = "",
     reward_model: torch.nn.Module = None,
-    fixed_mode: int = -1
+    fix_mode: int = -1,
 ):
     dataset = d4rl.qlearning_dataset(env)
     if clip_to_eps:
         lim = 1 - eps
         dataset["actions"] = np.clip(dataset["actions"], -lim, lim)
 
-    imputed_next_observations = np.roll(dataset['observations'], -1, axis=0)
-    same_obs = np.all(np.isclose(imputed_next_observations, dataset['next_observations'], atol=1e-5), axis=-1)
+    imputed_next_observations = np.roll(dataset["observations"], -1, axis=0)
+    same_obs = np.all(
+        np.isclose(imputed_next_observations, dataset["next_observations"], atol=1e-5),
+        axis=-1,
+    )
     dones_float = 1.0 - same_obs.astype(np.float32)
     dones_float[-1] = 1
-    
+
     dones_float = dataset["terminals"].astype(np.float32)
     dataset = {
         "observations": dataset["observations"],
@@ -45,12 +48,15 @@ def get_dataset(
 
     if use_reward_model:
         assert reward_model is not None
-        dataset = relabel_rewards_with_model(env, dataset, model_type, reward_model, append_goal, fixed_mode)
+        dataset = relabel_rewards_with_model(
+            env, dataset, model_type, reward_model, append_goal, fix_mode
+        )
     elif hasattr(env, "relabel_offline_reward") and env.relabel_offline_reward:
         dataset = relabel_rewards_with_env(env, dataset, append_goal)
 
     dataset = {k: v.astype(np.float32) for k, v in dataset.items()}
     return Dataset(dataset)
+
 
 def new_get_trj_idx(dataset):
     dones_float = dataset["dones_float"]
@@ -64,7 +70,7 @@ def new_get_trj_idx(dataset):
     episode_step = 0
     start_idx, data_idx = 0, 0
     trj_idx_list = []
-    for i in range(N - 1):
+    for i in tqdm(range(N - 1), desc="Getting trj idx"):
         done_bool = dones_float[i]
         if done_bool:
             episode_step = 0
@@ -77,7 +83,10 @@ def new_get_trj_idx(dataset):
     trj_idx_list.append([start_idx, data_idx])
     return trj_idx_list
 
-def relabel_rewards_with_model(env, dataset, model_type, reward_model, append_goal, fixed_mode):
+
+def relabel_rewards_with_model(
+    env, dataset, model_type, reward_model, append_goal, fix_mode
+):
     observation_dim = env.observation_space.shape[-1]
     if hasattr(env, "reward_observation_space"):
         observation_dim = env.reward_observation_space.shape[-1]
@@ -88,7 +97,10 @@ def relabel_rewards_with_model(env, dataset, model_type, reward_model, append_go
 
     traj_idx = new_get_trj_idx(dataset)
 
-    for start, end in traj_idx:
+    for start, end in tqdm(
+        traj_idx,
+        desc=f"Relabelling reward with {env.spec.id} {model_type}, append_goal: {append_goal}, fix_mode: {fix_mode}",
+    ):
         obs = dataset["observations"][start : end + 1]
         next_obs = dataset["next_observations"][start : end + 1]
 
@@ -105,7 +117,7 @@ def relabel_rewards_with_model(env, dataset, model_type, reward_model, append_go
                 rewards = reward_model.sample_reward(input_obs)
         else:
             with torch.no_grad():
-                idx = fixed_mode
+                idx = fix_mode
                 if idx < 0:
                     idx = env.sample_mode()
                 z = reward_model.biased_latents[idx]
@@ -118,9 +130,9 @@ def relabel_rewards_with_model(env, dataset, model_type, reward_model, append_go
                 rewards = reward_model.get_reward(torch.cat([input_obs, z], dim=-1))
 
                 if append_goal:
-                    # Changing the latent 
+                    # Changing the latent
                     z = torch.ones_like(z[:, :1]) * idx
-                
+
                 # Appending the task vector to the observation
                 obs_list.append(np.concatenate([obs, z.cpu().numpy()], axis=-1))
                 next_obs_list.append(
@@ -143,9 +155,12 @@ def relabel_rewards_with_env(env, dataset, append_goal):
     next_obs_list = []
     traj_idx = new_get_trj_idx(dataset)
     modes = []
-    for (start, end) in traj_idx:
-        obs = dataset["observations"][start:end+1]
-        next_obs = dataset["next_observations"][start:end+1]
+    for start, end in tqdm(
+        traj_idx,
+        desc=f"Relabelling reward with {env.spec.id}, append_goal: {append_goal}",
+    ):
+        obs = dataset["observations"][start : end + 1]
+        next_obs = dataset["next_observations"][start : end + 1]
         mode = env.sample_mode()
         new_rewards.append(env.compute_reward(obs[None], mode)[0])
         modes.append(mode)
@@ -154,11 +169,15 @@ def relabel_rewards_with_env(env, dataset, append_goal):
                 np.concatenate([obs, np.ones_like(obs[:, :1]) * mode], axis=-1)
             )
             next_obs_list.append(
-                np.concatenate([next_obs, np.ones_like(next_obs[:, :1]) * mode], axis=-1)
+                np.concatenate(
+                    [next_obs, np.ones_like(next_obs[:, :1]) * mode], axis=-1
+                )
             )
     print("Mean mode:", np.mean(modes))
     new_rewards = np.concatenate(new_rewards)
-    normalised_rewards = (new_rewards - new_rewards.min()) / (new_rewards.max() - new_rewards.min())
+    normalised_rewards = (new_rewards - new_rewards.min()) / (
+        new_rewards.max() - new_rewards.min()
+    )
     dataset["rewards"] = normalised_rewards
     if append_goal:
         dataset["observations"] = np.concatenate(obs_list, axis=0)

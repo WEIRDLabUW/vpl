@@ -19,22 +19,14 @@ def test_env(env_name):
         env.reset()
         env.reset_mode()
         print("Mode:", env.mode)
-        if hasattr(env, "env_task"):
-            print("Task:", env.env_task)
-        elif hasattr(env, "target"):
-            print("Target:", env.target)
+        print("Target:", env.target)
+            
     
     if env.is_multimodal:
         print("\n\nTesting multimodal env")
         for i in range(env.get_num_modes()):
             env.set_mode(i)
-            print("Mode:", env.mode)
-            if hasattr(env, "env_task"):
-                print("Task:", env.env_task)
-            elif hasattr(env, "target"):
-                print("Target:", env.target)
-            elif hasattr(env, "target_goal"):
-                print("Target:", env.target_goal)
+            print("Target:", env.target)
     
     print("\n\nTesting step")
     env.reset()
@@ -47,9 +39,9 @@ def test_env(env_name):
 
 if __name__ == "__main__":
     envs = [
-       "twogoals-mode0-v0",
-       "twogoals-mode1-v0",
-       "twogoals-multimodal-v0",
+       "maze2d-twogoals-mode0-v0",
+       "maze2d-twogoals-mode1-v0",
+       "maze2d-twogoals-multimodal-v0",
     ]
     for env in envs:
         test_env(env)

@@ -193,35 +193,29 @@ class WANDBVideo(gym.Wrapper):
     def get_rewards(self):
         return self._rewards
 
+    def write_text(self, frame, text):
+        img = Image.fromarray(frame)
+        l, w, d = frame.shape
+        i1 = ImageDraw.Draw(img)
+        i1.text(
+            (l // 20, w // 20),
+            text,
+            # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
+            fill=(255, 255, 255),
+        )
+        return np.asarray(img)
+
     def _add_frame(self, obs, action=None):
         if self._max_videos is not None and self._max_videos <= 0:
             return
         if self._render_frame:
-            frame = np.asarray(img)
+            frame = self.render(mode="rgb_array")
             if hasattr(self, "target"):
-                img = Image.fromarray(frame)
-                l, w, d = frame.shape
-                i1 = ImageDraw.Draw(img)
-                i1.text(
-                    (l // 20, w // 20),
-                    self.target,
-                    # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
-                    fill=(255, 255, 255),
-                )
-                frame = np.asarray(img)
+                frame = self.write_text(frame, f"target: {self.target}")
             if self._agent:
                 if self._curr_obs is not None:
                     value = self._agent.eval_critic(self._curr_obs, action)
-                    img = Image.fromarray(frame)
-                    l, w, d = frame.shape
-                    i1 = ImageDraw.Draw(img)
-                    i1.text(
-                        (l // 20, w // 20),
-                        "critic: " + str(np.round(value, 3)),
-                        # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
-                        fill=(255, 255, 255),
-                    )
-                    frame = np.asarray(img)
+                    frame = self.write_text(frame, f"critic: {np.round(value, 3)}")
                 self._curr_obs = obs
             if "pixels" in self._video:
                 self._video["pixels"].append(frame)

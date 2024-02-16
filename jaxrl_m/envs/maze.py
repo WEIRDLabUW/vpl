@@ -19,10 +19,12 @@ class MazeEnv(gym.Env):
         self.goals = np.array([(7, 1), (7, 10)])
         self.relabel_offline_reward = True
         self.is_multimodal = mode < 0
+        if not self.is_multimodal:
+            self.env.set_target(self.goals[mode])
 
     @property
     def target(self):
-        return self.env._target
+        return self.env.unwrapped._target
 
     def get_dataset(self):
         return self.env.get_dataset()
@@ -34,7 +36,7 @@ class MazeEnv(gym.Env):
         # Compute shaped reward
         obs, reward, done, info = self.env.step(action)
         # Override environment termination
-        info["success"] = -np.linalg.norm(obs[:2] - self.goals[self.mode]) < 0.5
+        info["success"] = -np.linalg.norm(obs[:2] - self.target) < 0.5
         return obs, reward, done, info
 
     def compute_reward(self, obs, mode):
@@ -62,8 +64,11 @@ class MazeEnv(gym.Env):
         )
         points = np.concatenate([xv.reshape(-1, 1), yv.reshape(-1, 1)], axis=1)[None]
         r = [self.compute_reward(points, mode) for mode in range(self.get_num_modes())]
-        fig, axs = plt.subplots(1, 2, figsize=(10, 8))
-        axs_flat = axs.flatten()
+        fig, axs = plt.subplots(1, self.get_num_modes(), figsize=(10, 8))
+        if self.get_num_modes() == 1:
+            axs_flat = [axs]
+        else:
+            axs_flat = axs.flatten()
         for i, ax in enumerate(axs_flat):
             ax.imshow(
                 (r[i].reshape(100, 100)).T,
@@ -81,7 +86,7 @@ class MazeEnv(gym.Env):
 
     def plot_goals(self, ax):
         for g in self.goals:
-            ax.scatter(g[0], g[1], s=20, c="red", marker="*")
+            ax.scatter(g[0], g[1], s=50, c="green", marker="*")
 
     def get_biased_data(self, set_len):
         w, l, _ = self.factor_int(set_len * 2)

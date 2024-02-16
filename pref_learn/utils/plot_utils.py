@@ -44,15 +44,20 @@ def plot_observation_rewards(obs, r, no_norm=False):
 
 
 def plot_mlp(env, reward_model):
-    obs, NX, NY, target_p = env.get_obs_grid()
-    input_size, x_range, y_range = obs.shape
-    obs = obs.reshape(input_size, -1).T
+    obs = env.get_obs_grid()
+    obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
-    reward = reward_model.get_reward(obs).detach().cpu().numpy().reshape(NX, NY)
+    r = reward_model.get_reward(obs).detach().cpu().numpy()
 
     fig, ax = plt.subplots()
-    ax.imshow(reward.T, cmap="viridis", interpolation="nearest", origin="lower")
-    plot_goals(env, ax, target_p, scale=50)
+    r = (r - r.min()) / (r.max() - r.min())
+    ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+    sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax)
+    cb.set_label("r(s)")
+    
+    env.plot_goals(ax)
     plt.title(f"reward model")
 
     plot_dict = dict(reward_plot=wandb.Image(fig))
@@ -63,26 +68,35 @@ def plot_mlp(env, reward_model):
 
 
 def plot_mlp_samples(env, reward_model, samples=4):
-    obs, NX, NY, target_p = env.get_obs_grid()
-    input_size, x_range, y_range = obs.shape
-    obs = obs.reshape(input_size, -1).T
+    obs = env.get_obs_grid()
+    obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
 
     plot_dict = plot_mlp(env, reward_model)
     fig, axs = plt.subplots(samples // 2, 2, figsize=(20, 16))
     for i, ax in enumerate(axs.flatten()):
-        reward = reward_model.sample_reward(obs).detach().cpu().numpy().reshape(NX, NY)
-        ax.imshow(reward.T, cmap="viridis", interpolation="nearest", origin="lower")
-        plot_goals(env, ax, target_p, scale=50)
+        r = reward_model.sample_reward(obs).detach().cpu().numpy()
+        r = (r - r.min()) / (r.max() - r.min())
+        ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+        sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+        sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax)
+        cb.set_label("r(s)")
         ax.set_title(f"reward model sample: {i}")
 
     plot_dict["reward_samples"] = wandb.Image(fig)
     plt.close(fig)
 
-    reward = reward_model.get_variance(obs).detach().cpu().numpy().reshape(NX, NY)
+    r = reward_model.get_variance(obs).detach().cpu().numpy()
     fig, ax = plt.subplots()
-    ax.imshow(reward.T, cmap="viridis", interpolation="nearest", origin="lower")
-    plot_goals(env, ax, target_p, scale=50)
+    r = reward_model.sample_reward(obs).detach().cpu().numpy()
+    r = (r - r.min()) / (r.max() - r.min())
+    ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+    sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax)
+    cb.set_label("r(s)")
+    env.plot_goals(ax)
     plt.title(f"reward model variance")
     plot_dict["reward_variance"] = wandb.Image(fig)
     plt.close(fig)

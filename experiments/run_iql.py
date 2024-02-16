@@ -12,6 +12,7 @@ import matplotlib.cm as cm
 import numpy as np
 import tqdm
 import wandb
+import torch
 
 from jaxrl_m.evaluation import supply_rng, evaluate
 import jaxrl_m.envs
@@ -36,7 +37,7 @@ flags.DEFINE_bool("save_video", False, "Save video of the agent.")
 flags.DEFINE_bool("use_reward_model", False, "Use reward model.")
 flags.DEFINE_string("model_type", "MLP", "Path to reward model.")
 flags.DEFINE_string("ckpt", "", "Path to reward model.")
-flags.DEFINE_integer("fix mode", -1, "Fix mode for a multimodal environment.")
+flags.DEFINE_integer("fix_mode", -1, "Fix mode for a multimodal environment.")
 flags.DEFINE_bool("append_goal", False, "Append goal to obs.")
 
 wandb_config = default_wandb_config()
@@ -78,10 +79,9 @@ def plot_traj(env, dataset):
         if i > 100:
             break
 
-
 def load_reward_model(ckpt):
-    with open(ckpt, "rb") as f:
-        reward_model = pickle.load(f)
+    with open(os.path.join(ckpt, "best_model.pt"), "rb") as f:
+        reward_model = torch.load(f)
     return reward_model
 
 
@@ -95,9 +95,9 @@ def update_observation(observation, mode, append_goal, model_type, reward_model)
 
 
 def get_modes_list(env):
-    if FLAGS.fixed < 0:
+    if FLAGS.fix_mode < 0:
         return range(env.get_num_modes())
-    return [FLAGS.fixed]
+    return [FLAGS.fix_mode]
 
 
 def evaluate_fn(agent, env, reward_model, num_episodes):
@@ -105,10 +105,6 @@ def evaluate_fn(agent, env, reward_model, num_episodes):
     eval_metrics = {}
     for n in get_modes_list(env):
         env.set_mode(n)
-        if FLAGS.model_type == "VAE":
-            latent
-        else:
-            latent = None
         eval_info = evaluate(
             policy_fn,
             env,
@@ -126,14 +122,10 @@ def evaluate_fn(agent, env, reward_model, num_episodes):
         eval_metrics.update(
             {f"evaluation/mode_{n}_{k}": v for k, v in eval_info.items()}
         )
-
+    return eval_metrics
 
 def main(_):
-
-    # Create wandb logger
-    assert not (
-        FLAGS.add_mode and FLAGS.use_reward_model
-    ), "Cannot use both mode and reward model"
+    print(FLAGS.config.to_dict())
 
     if FLAGS.save_dir is not None:
         FLAGS.save_dir = os.path.join(
@@ -173,7 +165,6 @@ def main(_):
 
     plot_traj(env, dataset)
 
-    dataset = Dataset(d4rl.qlearning_dataset(env, dataset))
     for i in tqdm.tqdm(
         range(1, FLAGS.max_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
@@ -199,10 +190,9 @@ def main(_):
             checkpoints.save_checkpoint(FLAGS.save_dir, agent, i)
 
     # Final evaluation
-    for n in get_modes_list(env):
-        eval_metrics = evaluate_fn(agent, env, reward_model, num_episodes=1000)
-        for k, v in eval_metrics.items():
-            wandb.log({f"FINAL_{n}/{k}": v})
+    eval_metrics = evaluate_fn(agent, env, reward_model, num_episodes=1000)
+    for k, v in eval_metrics.items():
+        wandb.log({f"FINAL-{k}": v})
 
 
 if __name__ == "__main__":
