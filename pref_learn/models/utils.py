@@ -12,9 +12,10 @@ def get_datasets(query_path, observation_dim, action_dim, batch_size):
     with open(query_path, "rb") as fp:
         batch = pickle.load(fp)
 
-    assert batch["observations"].shape[-1] == observation_dim
+    batch["observations"] = batch["observations"][..., :observation_dim]
+    batch["observations_2"] = batch["observations_2"][..., :observation_dim]
     assert batch["actions"].shape[-1] == action_dim
-
+    
     eval_data_size = int(0.1 * len(batch["observations"]))
     train_data_size = len(batch["observations"]) - eval_data_size
 
@@ -151,14 +152,12 @@ class EarlyStopper:
 
 
 def get_latent(batch, env, reward_model, mode, num_samples):
-    obs_dim = env.observation_space.shape[0]
+    # obs_dim = env.reward_observation_space.shape[0]
     obs1 = batch["observations"]
     obs2 = batch["observations_2"]
-    seg_reward_1, seg_reward_2 = env.get_preference_rewards(
-        obs1.reshape(-1, reward_model.size_segment, obs_dim),
-        obs2.reshape(-1, reward_model.size_segment, obs_dim),
-        mode=mode,
-    )
+    obs_dim = obs1.shape[-1]
+    seg_reward_1 = env.compute_reward(obs1.reshape(-1, reward_model.size_segment, obs_dim), mode)
+    seg_reward_2 = env.compute_reward(obs2.reshape(-1, reward_model.size_segment, obs_dim), mode)
 
     seg_reward_1 = seg_reward_1.reshape(
         num_samples, reward_model.annotation_size, reward_model.size_segment, -1
@@ -172,7 +171,6 @@ def get_latent(batch, env, reward_model, mode, num_samples):
     obs1 = torch.from_numpy(obs1).float().to(device)
     obs2 = torch.from_numpy(obs2).float().to(device)
     labels = torch.from_numpy(labels).float().to(device)
-    # import pdb; pdb.set_trace()
     with torch.no_grad():
         mean, _ = reward_model.encode(obs1, obs2, labels)
     return mean.cpu().numpy()

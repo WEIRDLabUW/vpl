@@ -1,7 +1,7 @@
 #!/bin/bash
 
 envs=("maze2d-fourrooms-v0" "maze2d-fourrooms2-v0")
-models=("MLP" "Categorical" "MeanVar" "VAE")
+models=("MLP" "VAE")
 
 for env in "${envs[@]}"
 do
@@ -12,7 +12,7 @@ do
 done
 
 envs=("maze2d-fourrooms-v0" "maze2d-fourrooms2-v0" "maze2d-pointmass-v0")
-models=("MLP" "Categorical" "MeanVar" "VAE")
+models=("MLP" "VAE")
 
 for env in "${envs[@]}"
 do

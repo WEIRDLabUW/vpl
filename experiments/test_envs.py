@@ -10,28 +10,23 @@ def test_env(env_name):
     print("Observation space:", env.observation_space)
     print("Action space:", env.action_space)
     print("Modes:", env.get_num_modes())
-    print("Is multimodal:", env.is_multimodal())
+    print("Is multimodal:", env.is_multimodal)
     
 
     #Testing modes randomization
     print("\n\nTesting modes randomization")
     for _ in range(10):
         env.reset()
-        print("Mode:", env.get_env_mode())
-        if hasattr(env, "env_task"):
-            print("Task:", env.env_task)
-        elif hasattr(env, "target"):
-            print("Target:", env.target)
+        env.reset_mode()
+        print("Mode:", env.mode)
+        print("Target:", env.target)
+            
     
-    if env.is_multimodal():
+    if env.is_multimodal:
         print("\n\nTesting multimodal env")
         for i in range(env.get_num_modes()):
             env.set_mode(i)
-            print("Mode:", env.get_env_mode())
-            if hasattr(env, "env_task"):
-                print("Task:", env.env_task)
-            elif hasattr(env, "target"):
-                print("Mode:", env.target)
+            print("Target:", env.target)
     
     print("\n\nTesting step")
     env.reset()
@@ -44,12 +39,9 @@ def test_env(env_name):
 
 if __name__ == "__main__":
     envs = [
-        # "maze2d-pointmass-fixed-v0",
-        # "maze2d-pointmass-v0",
-        # "maze2d-fourrooms-fixed-v0",
-        # "maze2d-fourrooms-v0",
-        "multi-kitchen-mixed-v0",
-        "multi-kitchen-mixed-fixed-v0",
+       "maze2d-twogoals-mode0-v0",
+       "maze2d-twogoals-mode1-v0",
+       "maze2d-twogoals-multimodal-v0",
     ]
     for env in envs:
         test_env(env)

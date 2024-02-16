@@ -33,7 +33,7 @@ FLAGS_DEF = define_flags_with_default(
     # MLP
     hidden_dim=256,
     # Categorical
-    num_atoms=51,
+    num_atoms=10,
     r_min=0,
     r_max=1,
     entropy_coeff=0.1,
@@ -60,6 +60,7 @@ FLAGS_DEF = define_flags_with_default(
     # plotting
     debug_plots=True,
     plot_observations=False,
+    reward_scaling=1.0
 )
 
 
@@ -92,7 +93,10 @@ def main(_):
     gym_env.action_space.seed(FLAGS.seed)
     gym_env.observation_space.seed(FLAGS.seed)
     set_random_seed(FLAGS.seed)
-    observation_dim = gym_env.observation_space.shape[0]
+    if hasattr(gym_env, "reward_observation_space"):
+        observation_dim = gym_env.reward_observation_space.shape[0]
+    else:
+        observation_dim = gym_env.observation_space.shape[0]
     action_dim = gym_env.action_space.shape[0]
 
     (
@@ -142,6 +146,7 @@ def main(_):
             learned_prior=FLAGS.learned_prior,
             flow_prior=FLAGS.flow_prior,
             annealer=annealer,
+            reward_scaling=FLAGS.reward_scaling
         )
     else:
         raise NotImplementedError
@@ -150,7 +155,7 @@ def main(_):
     reward_model = reward_model.to(device)
     optimizer = torch.optim.Adam(reward_model.parameters(), lr=FLAGS.lr)
     early_stop = EarlyStopper(FLAGS.patience, FLAGS.min_delta)
-
+    best_criteria = None
     for epoch in range(FLAGS.n_epochs):
         metrics = defaultdict(list)
         metrics["epoch"] = epoch
@@ -192,8 +197,18 @@ def main(_):
                 metrics.update(prefix_metrics(fig_dict, "debug_plots"))
 
             criteria = np.mean(metrics["eval/loss"])
-            if FLAGS.early_stop and early_stop(criteria):
+
+            if best_criteria is None:
+                best_criteria = criteria
+                torch.save(reward_model, save_dir + f"/best_model.pt")
+
+            if criteria < best_criteria:
+                torch.save(reward_model, save_dir + f"/best_model.pt")
+                best_criteria = criteria
+
+            if FLAGS.early_stop and early_stop.early_stop(criteria):
                 log_metrics(metrics, epoch, wb_logger)
+                torch.save(reward_model, save_dir + f"/model_{epoch}.pt")
                 break
 
         if epoch % FLAGS.save_freq == 0:

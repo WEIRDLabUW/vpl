@@ -3,61 +3,19 @@ import pickle
 
 import numpy as np
 from tqdm import tqdm
-
-
-def new_get_trj_idx(env, terminate_on_end=False, **kwargs):
-    if not hasattr(env, "get_dataset"):
-        dataset = kwargs["dataset"]
-    else:
-        dataset = env.get_dataset()
-    N = dataset["rewards"].shape[0]
-
-    # The newer version of the dataset adds an explicit
-    # timeouts field. Keep old method for backwards compatability.
-    use_timeouts = False
-    if "timeouts" in dataset:
-        use_timeouts = True
-
-    episode_step = 0
-    start_idx, data_idx = 0, 0
-    trj_idx_list = []
-    for i in range(N - 1):
-        if env.spec and "maze" in env.spec.id:
-            done_bool = sum(dataset["infos/goal"][i + 1] - dataset["infos/goal"][i]) > 0
-        else:
-            done_bool = bool(dataset["terminals"][i])
-        if use_timeouts:
-            final_timestep = dataset["timeouts"][i]
-        else:
-            final_timestep = episode_step == env._max_episode_steps - 1
-        if (not terminate_on_end) and final_timestep:
-            # Skip this transition and don't apply terminals on the last step of an episode
-            episode_step = 0
-            trj_idx_list.append([start_idx, data_idx - 1])
-            start_idx = data_idx
-            continue
-        if done_bool or final_timestep:
-            episode_step = 0
-            trj_idx_list.append([start_idx, data_idx])
-            start_idx = data_idx + 1
-
-        episode_step += 1
-        data_idx += 1
-
-    trj_idx_list.append([start_idx, data_idx])
-
-    return trj_idx_list
-
+from jaxrl_m.learners.d4rl_utils import new_get_trj_idx
 
 def sample_from_env(env, num_query, len_set, len_query, data_dir):
     assert len_query == 1
-    observation_dim = env.observation_space.shape[-1]
+    observation_dim = env.reward_observation_space.shape[-1]
     action_dim = env.action_space.shape[-1]
     seg_obs_1 = np.stack(
-        [env.observation_space.sample() for _ in range(num_query * len_set)], axis=1
+        [env.reward_observation_space.sample() for _ in range(num_query * len_set)],
+        axis=1,
     ).reshape(num_query, len_set, len_query, observation_dim)
     seg_obs_2 = np.stack(
-        [env.observation_space.sample() for _ in range(num_query * len_set)], axis=1
+        [env.reward_observation_space.sample() for _ in range(num_query * len_set)],
+        axis=1,
     ).reshape(num_query, len_set, len_query, observation_dim)
     seg_act_1 = np.stack(
         [env.action_space.sample() for _ in range(num_query * len_set)], axis=1
@@ -83,14 +41,7 @@ def sample_from_env(env, num_query, len_set, len_query, data_dir):
     with open(query_path, "wb") as fp:
         pickle.dump(batch, fp)
 
-    all_obs = np.concatenate(
-        [
-            seg_obs_1.reshape(-1, observation_dim),
-            seg_obs_2.reshape(-1, observation_dim),
-        ],
-        axis=0,
-    )
-    return batch, query_path, all_obs
+    return batch, query_path
 
 
 def get_queries_from_multi(
@@ -106,7 +57,7 @@ def get_queries_from_multi(
     num_query *= len_set
 
     os.makedirs(data_dir, exist_ok=True)
-    trj_idx_list = new_get_trj_idx(env, dataset=dataset)  # get_nonmdp_trj_idx(env)
+    trj_idx_list = new_get_trj_idx(dataset)  # get_nonmdp_trj_idx(env)
     labeler_info = np.zeros(len(trj_idx_list) - 1)
 
     # to-do: parallel implementation
@@ -142,7 +93,7 @@ def get_queries_from_multi(
     query_path = os.path.join(
         data_dir, f"queries_num{_num_query}_q{len_query}_s{len_set}"
     )
-    already_queried = []
+    # already_queried = []
     for query_count in tqdm(range(num_query), desc="get queries"):
         temp_count = 0
         labeler = -1
@@ -199,8 +150,8 @@ def get_queries_from_multi(
                     total_act_seq_1[query_count] = act_seq
                     total_timestep_1[query_count] = timestep_seq
                 else:
-                    if (start_idx, start_indices_1[query_count]) in already_queried:
-                        continue
+                    # if (start_idx, start_indices_1[query_count]) in already_queried:
+                    #     continue
                     start_indices_2[query_count] = start_idx
                     time_indices_2[query_count] = time_idx
                     total_reward_seq_2[query_count] = reward_seq
@@ -210,9 +161,9 @@ def get_queries_from_multi(
                     total_timestep_2[query_count] = timestep_seq
 
                 temp_count += 1
-                already_queried.append(
-                    (start_indices_2[query_count], start_indices_1[query_count])
-                )
+                # already_queried.append(
+                #     (start_indices_2[query_count], start_indices_1[query_count])
+                # )
 
     seg_reward_1 = total_reward_seq_1.copy()
     seg_reward_2 = total_reward_seq_2.copy()
@@ -260,10 +211,8 @@ def get_queries_from_multi(
     with open(query_path, "wb") as fp:
         pickle.dump(batch, fp)
 
-    all_obs = np.concatenate(
-        [batch["observations"], batch["observations_2"]], axis=0
-    ).reshape(-1, observation_dim)
-    return batch, query_path, all_obs
+    return batch, query_path
+
 
 def get_labels(seg_reward_1, seg_reward_2):
     sum_r_t_1 = np.sum(seg_reward_1, axis=-1)

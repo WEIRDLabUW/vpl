@@ -105,8 +105,8 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
         new_obs = dataset['observations'][i+1].astype(np.float32)
         action = dataset['actions'][i].astype(np.float32)
         reward = dataset['rewards'][i].astype(np.float32)
-        # if 'maze' in env.spec.id:
-        if False:
+        if 'maze' in env.spec.id:
+        # if False:
             done_bool = sum(dataset['infos/goal'][i+1] - dataset['infos/goal'][i]) > 0
         else:
             done_bool = bool(dataset['terminals'][i])
@@ -114,7 +114,7 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
         if use_timeouts:
             final_timestep = dataset['timeouts'][i]
         else:
-            final_timestep = (episode_step == env._max_episode_steps - 1)
+            final_timestep = (episode_step == env.unwrapped._max_episode_steps - 1)
         if (not terminate_on_end) and final_timestep:
             # Skip this transition and don't apply terminals on the last step of an episode
             episode_step = 0

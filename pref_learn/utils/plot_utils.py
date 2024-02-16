@@ -27,61 +27,76 @@ def plot_goals(env, ax, target_p, scale):
         ax.scatter(x=target_p[0], y=target_p[1], color="red", s=100)
 
 
-def plot_observation_rewards(obs, r):
+def plot_observation_rewards(obs, r, no_norm=False):
     fig, ax = plt.subplots()
     r = (r - r.min()) / (r.max() - r.min())
-    norm = matplotlib.colors.Normalize(vmin=0, vmax=1, clip=True)
+    if no_norm:
+        norm = matplotlib.colors.NoNorm()
+    else:
+        norm = matplotlib.colors.Normalize(vmin=0, vmax=1, clip=True)
     ax.scatter(obs[:, 0], obs[:, 1], c=cm.bwr(norm(r)))
     sm = cm.ScalarMappable(cmap=cm.bwr, norm=norm)
     sm.set_array([])
     cb = fig.colorbar(sm, ax=ax)
     cb.set_label("r(s)")
     plt.close(fig)
-    return dict(observation_reward_plot=wandb.Image(fig))
+    return fig
 
 
-def plot_mlp(env, reward_model, train_obs=None, train_r=None):
-    obs, NX, NY, target_p = env.get_obs_grid()
-    input_size, x_range, y_range = obs.shape
-    obs = obs.reshape(input_size, -1).T
+def plot_mlp(env, reward_model):
+    obs = env.get_obs_grid()
+    obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
-    reward = reward_model.get_reward(obs).detach().cpu().numpy().reshape(NX, NY)
+    r = reward_model.get_reward(obs).detach().cpu().numpy()
 
     fig, ax = plt.subplots()
-    ax.imshow(reward.T, cmap="viridis", interpolation="nearest", origin="lower")
-    plot_goals(env, ax, target_p, scale=50)
+    r = (r - r.min()) / (r.max() - r.min())
+    ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+    sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax)
+    cb.set_label("r(s)")
+    
+    env.plot_goals(ax)
     plt.title(f"reward model")
 
     plot_dict = dict(reward_plot=wandb.Image(fig))
     plt.close(fig)
-    # if train_obs:
-    #     plot_dict.update(plot_observation_rewards(train_obs, train_r))
     if hasattr(env, "plot_gt"):
         plot_dict["gt"] = env.plot_gt(wandb_log=True)
     return plot_dict
 
 
-def plot_mlp_samples(env, reward_model, samples=4, train_obs=None, train_r=None):
-    obs, NX, NY, target_p = env.get_obs_grid()
-    input_size, x_range, y_range = obs.shape
-    obs = obs.reshape(input_size, -1).T
+def plot_mlp_samples(env, reward_model, samples=4):
+    obs = env.get_obs_grid()
+    obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
 
-    plot_dict = plot_mlp(env, reward_model, train_obs, train_r)
+    plot_dict = plot_mlp(env, reward_model)
     fig, axs = plt.subplots(samples // 2, 2, figsize=(20, 16))
     for i, ax in enumerate(axs.flatten()):
-        reward = reward_model.sample_reward(obs).detach().cpu().numpy().reshape(NX, NY)
-        ax.imshow(reward.T, cmap="viridis", interpolation="nearest", origin="lower")
-        plot_goals(env, ax, target_p, scale=50)
+        r = reward_model.sample_reward(obs).detach().cpu().numpy()
+        r = (r - r.min()) / (r.max() - r.min())
+        ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+        sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+        sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax)
+        cb.set_label("r(s)")
         ax.set_title(f"reward model sample: {i}")
 
     plot_dict["reward_samples"] = wandb.Image(fig)
     plt.close(fig)
 
-    reward = reward_model.get_variance(obs).detach().cpu().numpy().reshape(NX, NY)
+    r = reward_model.get_variance(obs).detach().cpu().numpy()
     fig, ax = plt.subplots()
-    ax.imshow(reward.T, cmap="viridis", interpolation="nearest", origin="lower")
-    plot_goals(env, ax, target_p, scale=50)
+    r = reward_model.sample_reward(obs).detach().cpu().numpy()
+    r = (r - r.min()) / (r.max() - r.min())
+    ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+    sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+    sm.set_array([])
+    cb = fig.colorbar(sm, ax=ax)
+    cb.set_label("r(s)")
+    env.plot_goals(ax)
     plt.title(f"reward model variance")
     plot_dict["reward_variance"] = wandb.Image(fig)
     plt.close(fig)
@@ -142,17 +157,13 @@ def plot_latents(env, reward_model, dataset):
     return dict(latent_plot=wandb.Image(fig))
 
 
-def plot_z(env, reward_model, latents):
+def plot_z(obs, env, reward_model, latents):
     assert latents.shape[0] == env.get_num_modes()
     assert latents.shape[2] == reward_model.latent_dim
-
     num_samples = latents.shape[1]
     modes_n = env.get_num_modes()
     fig, axs = plt.subplots(modes_n, num_samples, figsize=(20, 16))
-
-    obs, NX, NY, target_p = env.get_obs_grid()
-    input_size, x_range, y_range = obs.shape
-    obs = obs.reshape(input_size, -1).T
+    obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
 
     axs = axs.flatten()
@@ -162,20 +173,26 @@ def plot_z(env, reward_model, latents):
             z = latents[None, mode_n, i]
             z = np.repeat(z, obs.shape[0], axis=0)
             z = torch.from_numpy(z).float().to(next(reward_model.parameters()).device)
-            r = reward_model.decode(obs, z).detach().cpu().numpy().reshape((NX, NY))
+            r = reward_model.decode(obs, z).detach().cpu().numpy() #.reshape((NX, NY))
             r = (r - r.min()) / (r.max() - r.min())
-            if i > num_samples // 2:
-                r = np.exp(r)
-            ax.imshow(r.T, cmap="viridis", interpolation="nearest", origin="lower")
-            plot_goals(env, ax, target_p, scale=50)
+            ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
+            sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
+            sm.set_array([])
+            cb = fig.colorbar(sm, ax=ax)
+            cb.set_label("r(s)")
             ax.set_title(f"Mode {mode_n}")
+
+            env.plot_goals(ax)
+
     plt.tight_layout()
     plt.close(fig)
     return wandb.Image(fig)
 
 
-def plot_vae(env, reward_model, dataset, num_samples=4, train_obs=None, train_r=None):
-    # import pdb; pdb.set_trace()
+def plot_vae(env, reward_model, dataset, num_samples=4):
+    obs = dataset.get_mode_data(batch_size=100)["observations"]
+    obs = obs.reshape(-1, obs.shape[-1])
+
     plot_dict = plot_prior(reward_model)
     plot_dict.update(plot_latents(env, reward_model, dataset))
 
@@ -190,9 +207,11 @@ def plot_vae(env, reward_model, dataset, num_samples=4, train_obs=None, train_r=
     posterior_latents = get_all_posterior(env, reward_model, dataset, num_samples)
     biased_latents = get_biased(env, reward_model)
 
-    plot_dict["prior"] = plot_z(env, reward_model, prior_latents)
-    plot_dict["posterior"] = plot_z(env, reward_model, posterior_latents)
-    plot_dict["biased"] = plot_z(env, reward_model, biased_latents)
+    reward_model.update_posteriors(posterior_latents, biased_latents)
+
+    plot_dict["prior"] = plot_z(obs, env, reward_model, prior_latents)
+    plot_dict["posterior"] = plot_z(obs, env, reward_model, posterior_latents)
+    plot_dict["biased"] = plot_z(obs, env, reward_model, biased_latents)
     if hasattr(env, "plot_gt"):
         plot_dict["gt"] = env.plot_gt(wandb_log=True)
     return plot_dict

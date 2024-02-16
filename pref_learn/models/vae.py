@@ -61,7 +61,8 @@ class VAEModel(nn.Module):
         kl_weight=1.0,
         learned_prior=False,
         flow_prior=False,
-        annealer=None
+        annealer=None,
+        reward_scaling=1.0
     ):
         super(VAEModel, self).__init__()
         self.Encoder = Encoder(encoder_input, hidden_dim, latent_dim)
@@ -83,6 +84,7 @@ class VAEModel(nn.Module):
         
         self.kl_weight = kl_weight
         self.annealer = annealer
+        self.scaling = reward_scaling
 
     def reparameterization(self, mean, var):
         epsilon = torch.randn_like(var).to(mean.device)  # sampling epsilon
@@ -151,8 +153,8 @@ class VAEModel(nn.Module):
         r0 = self.decode(s1, z)
         r1 = self.decode(s2, z)
 
-        r_hat1 = r0.sum(axis=2)
-        r_hat2 = r1.sum(axis=2)
+        r_hat1 = r0.sum(axis=2)/self.scaling
+        r_hat2 = r1.sum(axis=2)/self.scaling
 
         p_hat = torch.nn.functional.sigmoid(r_hat1 - r_hat2).view(-1, 1)
         labels = y.view(-1, 1)
@@ -189,3 +191,7 @@ class VAEModel(nn.Module):
         mean, log_var = self.encode(s1, s2, y)
         z = self.reparameterization(mean, torch.exp(0.5 * log_var))
         return mean, log_var, z
+    
+    def update_posteriors(self, posteriors, biased_latents):
+        self.posteriors = posteriors
+        self.biased_latents = biased_latents
