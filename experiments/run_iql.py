@@ -96,7 +96,12 @@ def update_observation(observation, mode, append_goal, model_type, reward_model)
 
 def get_modes_list(env):
     if FLAGS.fix_mode < 0:
-        return range(env.get_num_modes())
+        n = env.get_num_modes()
+        if n > 1:
+            return range(n)
+        else:
+            return [env.mode]
+        # return range(env.get_num_modes())
     return [FLAGS.fix_mode]
 
 
@@ -108,7 +113,7 @@ def evaluate_fn(agent, env, reward_model, num_episodes):
         eval_info = evaluate(
             policy_fn,
             env,
-            num_episodes=FLAGS.eval_episodes,
+            num_episodes=num_episodes,
             save_video=FLAGS.save_video,
             name=f"video_mode_{n}",
             obs_fn=partial(

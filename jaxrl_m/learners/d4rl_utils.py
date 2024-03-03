@@ -5,7 +5,15 @@ from tqdm import tqdm
 import torch
 
 from jaxrl_m.dataset import Dataset
+import matplotlib.pyplot as plt
 
+def plot_observation_rewards(obs, r, no_norm=True):
+    fig, ax = plt.subplots()
+    # r = norm_reward(r)
+    sc = ax.scatter(obs[:, 0], obs[:, 1], c=r)
+    plt.colorbar(sc, ax=ax)
+    plt.close(fig)
+    return fig
 
 def make_env(env_name: str):
     env = gym.make(env_name)
@@ -94,7 +102,7 @@ def relabel_rewards_with_model(
     obs_list = []
     next_obs_list = []
     new_rewards = np.zeros_like(dataset["rewards"])
-
+    mode_mask = np.zeros_like(dataset["rewards"])
     traj_idx = new_get_trj_idx(dataset)
 
     for start, end in tqdm(
@@ -109,6 +117,7 @@ def relabel_rewards_with_model(
             .float()
             .to(next(reward_model.parameters()).device)
         )
+        idx = fix_mode
         if model_type == "MLP":
             with torch.no_grad():
                 rewards = reward_model.get_reward(input_obs)
@@ -117,7 +126,6 @@ def relabel_rewards_with_model(
                 rewards = reward_model.sample_reward(input_obs)
         else:
             with torch.no_grad():
-                idx = fix_mode
                 if idx < 0:
                     idx = env.sample_mode()
                 z = reward_model.biased_latents[idx]
@@ -140,13 +148,40 @@ def relabel_rewards_with_model(
                 )
 
         new_rewards[start : end + 1] = rewards.cpu().numpy()[:, 0]
+        mode_mask[start : end + 1] = idx
 
     if len(obs_list) > 0:
         dataset["observations"] = np.concatenate(obs_list, axis=0)
         dataset["next_observations"] = np.concatenate(next_obs_list, axis=0)
+    
+    if model_type == "MLP" or model_type == "Categorical" or model_type == "MeanVar":
+        new_rewards = (new_rewards - new_rewards.min()) / (
+            new_rewards.max() - new_rewards.min()
+        )
+    elif model_type == "VAE":
+        id_r0 = np.argwhere(mode_mask == 0)
+        id_r1 = np.argwhere(mode_mask == 1)
+        new_rewards[id_r0] = (new_rewards[id_r0] - new_rewards[id_r0].min()) / (
+            new_rewards[id_r0].max() - new_rewards[id_r0].min()
+        )
+        new_rewards[id_r1] = (new_rewards[id_r1] - new_rewards[id_r1].min()) / (
+            new_rewards[id_r1].max() - new_rewards[id_r1].min()
+        )
+    
+    new_rewards = np.exp(new_rewards/0.1)
     dataset["rewards"] = (new_rewards - new_rewards.min()) / (
         new_rewards.max() - new_rewards.min()
     )
+
+    obs0 = dataset["observations"][np.argwhere(mode_mask == 0)][:10000]
+    obs1 = dataset["observations"][np.argwhere(mode_mask == 1)][:10000]
+    r0 = dataset["rewards"][np.argwhere(mode_mask == 0)][:10000]
+    r1 = dataset["rewards"][np.argwhere(mode_mask == 1)][:10000]
+
+    fig0 = plot_observation_rewards(obs0[:, 0], r0)
+    fig0.savefig("obs0_og.png")
+    fig1 = plot_observation_rewards(obs1[:, 0], r1)
+    fig1.savefig("obs1_og.png")
     return dataset
 
 def relabel_rewards_with_env(env, dataset, append_goal):
@@ -175,6 +210,10 @@ def relabel_rewards_with_env(env, dataset, append_goal):
             )
     print("Mean mode:", np.mean(modes))
     new_rewards = np.concatenate(new_rewards)
+    new_rewards = (new_rewards - new_rewards.min()) / (
+        new_rewards.max() - new_rewards.min()
+    )
+    new_rewards = np.exp(new_rewards/0.1)
     normalised_rewards = (new_rewards - new_rewards.min()) / (
         new_rewards.max() - new_rewards.min()
     )

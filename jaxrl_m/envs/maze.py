@@ -19,6 +19,7 @@ class MazeEnv(gym.Env):
         self.goals = np.array([(7, 1), (7, 10)])
         self.relabel_offline_reward = True
         self.is_multimodal = mode < 0
+        self.biased_mode = None
         if not self.is_multimodal:
             self.env.set_target(self.goals[mode])
 
@@ -36,7 +37,11 @@ class MazeEnv(gym.Env):
         # Compute shaped reward
         obs, reward, done, info = self.env.step(action)
         # Override environment termination
-        info["success"] = -np.linalg.norm(obs[:2] - self.target) < 0.5
+        success = np.linalg.norm(obs[:2] - self.target) < 0.5
+        if success:
+            done = True
+        info["actual_reward"] = reward
+        reward = success
         return obs, reward, done, info
 
     def compute_reward(self, obs, mode):
@@ -62,6 +67,9 @@ class MazeEnv(gym.Env):
         xv, yv = np.meshgrid(
             np.linspace(*(0, 8), 100), np.linspace(*(0, 11), 100), indexing="ij"
         )
+        obs1, obs2 = self.get_biased_data(16)
+        obs1 *= 10
+        obs2 *= 10
         points = np.concatenate([xv.reshape(-1, 1), yv.reshape(-1, 1)], axis=1)[None]
         r = [self.compute_reward(points, mode) for mode in range(self.get_num_modes())]
         fig, axs = plt.subplots(1, self.get_num_modes(), figsize=(10, 8))
@@ -76,6 +84,8 @@ class MazeEnv(gym.Env):
                 interpolation="nearest",
                 origin="lower",
             )
+            ax.scatter(obs1[:, 0], obs1[:, 1], c="red", s=50, marker="x")
+            ax.scatter(obs2[:, 0], obs2[:, 1], c="blue", s=50, marker="x")
             # self.plot_goals(ax)
         plt.tight_layout()
         if wandb_log:
@@ -88,10 +98,22 @@ class MazeEnv(gym.Env):
         for g in self.goals:
             ax.scatter(g[0], g[1], s=50, c="green", marker="*")
 
+    def set_biased_mode(self, mode):
+        self.biased_mode = mode
+        
     def get_biased_data(self, set_len):
-        w, l, _ = self.factor_int(set_len * 2)
-        obs = np.mgrid[0 : 8 : w * 1j, 0 : 11 : l * 1j]
-        obs = obs.reshape(obs.shape[0], -1).T
+        if self.biased_mode == "grid":
+            w, l, _ = self.factor_int(set_len * 2)
+            obs = np.mgrid[0 : 8 : w * 1j, 0 : 11 : l * 1j]
+            obs = obs.reshape(obs.shape[0], -1).T
+        elif self.biased_mode == "random":
+            obs = np.random.uniform(0, 1, (set_len * 2, 2)) * np.array([8, 11])
+        elif self.biased_mode == "equal":
+            obs_y = np.random.uniform(5, 7, size=(2*set_len, ))
+            obs_x = np.random.uniform(1, 7, size=(2*set_len, ))
+            obs = np.stack([obs_x, obs_y], axis=1)
+        else:
+            raise ValueError("Invalid biased mode")
         # idxs = np.random.permutation(np.arange(obs.shape[0]))
         return obs[:set_len], np.copy((obs[set_len:])[::-1])
 

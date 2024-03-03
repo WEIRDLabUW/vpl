@@ -60,7 +60,9 @@ FLAGS_DEF = define_flags_with_default(
     # plotting
     debug_plots=True,
     plot_observations=False,
-    reward_scaling=1.0
+    reward_scaling=1.0,
+    #biased
+    biased_mode="grid",
 )
 
 
@@ -97,6 +99,7 @@ def main(_):
         observation_dim = gym_env.reward_observation_space.shape[0]
     else:
         observation_dim = gym_env.observation_space.shape[0]
+    gym_env.set_biased_mode(FLAGS.biased_mode)
     action_dim = gym_env.action_space.shape[0]
 
     (
