@@ -2,13 +2,21 @@ import matplotlib
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from scipy import stats
 import torch
 import wandb
 
 from pref_learn.models.utils import get_all_posterior, get_biased
 
+def plot_reward(ax, obs, r):
+    r = (r - r.min()) / (r.max() - r.min())
+    r = np.exp(r/0.1)
+    r = (r - r.min()) / (r.max() - r.min())
+    sc = ax.scatter(obs[:, 0], obs[:, 1], c=r)
+    cb = plt.colorbar(sc, ax=ax)
+    cb.set_label("r(s)")
 
 def plot_observations(observations, base_path):
     if observations.shape[1] > 2:
@@ -29,16 +37,7 @@ def plot_goals(env, ax, target_p, scale):
 
 def plot_observation_rewards(obs, r, no_norm=False):
     fig, ax = plt.subplots()
-    r = (r - r.min()) / (r.max() - r.min())
-    if no_norm:
-        norm = matplotlib.colors.NoNorm()
-    else:
-        norm = matplotlib.colors.Normalize(vmin=0, vmax=1, clip=True)
-    ax.scatter(obs[:, 0], obs[:, 1], c=cm.bwr(norm(r)))
-    sm = cm.ScalarMappable(cmap=cm.bwr, norm=norm)
-    sm.set_array([])
-    cb = fig.colorbar(sm, ax=ax)
-    cb.set_label("r(s)")
+    plot_reward(ax, obs, r)
     plt.close(fig)
     return fig
 
@@ -50,13 +49,7 @@ def plot_mlp(env, reward_model):
     r = reward_model.get_reward(obs).detach().cpu().numpy()
 
     fig, ax = plt.subplots()
-    r = (r - r.min()) / (r.max() - r.min())
-    ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
-    sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
-    sm.set_array([])
-    cb = fig.colorbar(sm, ax=ax)
-    cb.set_label("r(s)")
-    
+    plot_reward(ax, obs_copy, r)
     env.plot_goals(ax)
     plt.title(f"reward model")
 
@@ -75,13 +68,7 @@ def plot_mlp_samples(env, reward_model, samples=4):
     plot_dict = plot_mlp(env, reward_model)
     fig, axs = plt.subplots(samples // 2, 2, figsize=(20, 16))
     for i, ax in enumerate(axs.flatten()):
-        r = reward_model.sample_reward(obs).detach().cpu().numpy()
-        r = (r - r.min()) / (r.max() - r.min())
-        ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
-        sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
-        sm.set_array([])
-        cb = fig.colorbar(sm, ax=ax)
-        cb.set_label("r(s)")
+        plot_reward(ax, obs_copy, reward_model.sample_reward(obs).detach().cpu().numpy())
         ax.set_title(f"reward model sample: {i}")
 
     plot_dict["reward_samples"] = wandb.Image(fig)
@@ -89,13 +76,8 @@ def plot_mlp_samples(env, reward_model, samples=4):
 
     r = reward_model.get_variance(obs).detach().cpu().numpy()
     fig, ax = plt.subplots()
-    r = reward_model.sample_reward(obs).detach().cpu().numpy()
-    r = (r - r.min()) / (r.max() - r.min())
-    ax.scatter(obs_copy[:, 0], obs_copy[:, 1], c=cm.bwr(r))
-    sm = cm.ScalarMappable(cmap=cm.bwr, norm=matplotlib.colors.Normalize(clip=False))
-    sm.set_array([])
-    cb = fig.colorbar(sm, ax=ax)
-    cb.set_label("r(s)")
+    # r = reward_model.sample_reward(obs).detach().cpu().numpy()
+    plot_reward(ax, obs_copy, r)
     env.plot_goals(ax)
     plt.title(f"reward model variance")
     plot_dict["reward_variance"] = wandb.Image(fig)
@@ -130,9 +112,7 @@ def plot_latents(env, reward_model, dataset):
     latents = get_all_posterior(env, reward_model, dataset, 128)
     for mode_n in range(modes_n):
         z = latents[mode_n]
-        X_embedded = TSNE(
-            n_components=2, learning_rate="auto", init="random", perplexity=3
-        ).fit_transform(z)
+        X_embedded = PCA(n_components=2).fit_transform(z)
         ax1.scatter(X_embedded[:, 0], X_embedded[:, 1], c=f"C{mode_n}")
 
         if reward_model.flow_prior:
@@ -146,9 +126,7 @@ def plot_latents(env, reward_model, dataset):
                 .cpu()
                 .numpy()
             )
-            X_embedded = TSNE(
-                n_components=2, learning_rate="auto", init="random", perplexity=3
-            ).fit_transform(transformed_z)
+            X_embedded = PCA(n_components=2).fit_transform(transformed_z)
             ax2.scatter(X_embedded[:, 0], X_embedded[:, 1], c=f"C{mode_n}")
     ax1.set_title("Latent embeddings")
     if reward_model.flow_prior:

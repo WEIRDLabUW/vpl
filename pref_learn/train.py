@@ -25,6 +25,7 @@ FLAGS_DEF = define_flags_with_default(
     comment="",
     data_seed=42,
     batch_size=256,
+    set_size=-1,
     early_stop=False,
     min_delta=3e-4,
     patience=10,
@@ -110,7 +111,7 @@ def main(_):
         len_set,
         len_query,
         obs_dim,
-    ) = get_datasets(FLAGS.dataset_path, observation_dim, action_dim, FLAGS.batch_size)
+    ) = get_datasets(FLAGS.dataset_path, observation_dim, action_dim, FLAGS.batch_size, FLAGS.set_size)
 
     if FLAGS.model_type == "MLP":
         reward_model = MLPModel(obs_dim, FLAGS.hidden_dim)

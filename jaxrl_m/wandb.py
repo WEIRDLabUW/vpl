@@ -198,10 +198,10 @@ class WANDBVideo(gym.Wrapper):
         l, w, d = frame.shape
         i1 = ImageDraw.Draw(img)
         i1.text(
-            (l // 20, w // 20),
+            (l // 5, w // 5),
             text,
             # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
-            fill=(255, 255, 255),
+            fill=(0, 0, 0),
         )
         return np.asarray(img)
 
@@ -217,6 +217,7 @@ class WANDBVideo(gym.Wrapper):
                     value = self._agent.eval_critic(self._curr_obs, action)
                     frame = self.write_text(frame, f"critic: {np.round(value, 3)}")
                 self._curr_obs = obs
+            frame = self.write_text(frame, f"action: {action}")
             if "pixels" in self._video:
                 self._video["pixels"].append(frame)
             else:

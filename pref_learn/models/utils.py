@@ -8,31 +8,33 @@ from torch.utils.data import Dataset, DataLoader
 from pref_learn.utils.data_utils import get_labels
 
 
-def get_datasets(query_path, observation_dim, action_dim, batch_size):
+def get_datasets(query_path, observation_dim, action_dim, batch_size, set_length):
     with open(query_path, "rb") as fp:
         batch = pickle.load(fp)
 
     batch["observations"] = batch["observations"][..., :observation_dim]
     batch["observations_2"] = batch["observations_2"][..., :observation_dim]
     assert batch["actions"].shape[-1] == action_dim
+    if set_length < 0:
+        set_length = batch["observations"].shape[1]
     
     eval_data_size = int(0.1 * len(batch["observations"]))
     train_data_size = len(batch["observations"]) - eval_data_size
 
     train_batch = {
-        "observations": batch["observations"][:train_data_size],
-        "actions": batch["actions"][:train_data_size],
-        "observations_2": batch["observations_2"][:train_data_size],
-        "actions_2": batch["actions_2"][:train_data_size],
-        "labels": batch["labels"][:train_data_size],
+        "observations": batch["observations"][:train_data_size, :set_length],
+        "actions": batch["actions"][:train_data_size, :set_length],
+        "observations_2": batch["observations_2"][:train_data_size, :set_length],
+        "actions_2": batch["actions_2"][:train_data_size, :set_length],
+        "labels": batch["labels"][:train_data_size, :set_length],
     }
 
     eval_batch = {
-        "observations": batch["observations"][train_data_size:],
-        "actions": batch["actions"][train_data_size:],
-        "observations_2": batch["observations_2"][train_data_size:],
-        "actions_2": batch["actions_2"][train_data_size:],
-        "labels": batch["labels"][train_data_size:],
+        "observations": batch["observations"][train_data_size:, :set_length],
+        "actions": batch["actions"][train_data_size:, :set_length],
+        "observations_2": batch["observations_2"][train_data_size:, :set_length],
+        "actions_2": batch["actions_2"][train_data_size:, :set_length],
+        "labels": batch["labels"][train_data_size:, :set_length],
     }
 
     train_dataset = PreferenceDataset(train_batch)
@@ -45,13 +47,13 @@ def get_datasets(query_path, observation_dim, action_dim, batch_size):
         dataset=eval_dataset, batch_size=batch_size, shuffle=False, **kwargs
     )
 
-    _, len_set, len_query, obs_dim = batch["observations"].shape
+    _, _, len_query, obs_dim = batch["observations"].shape
     return (
         train_loader,
         test_loader,
         train_dataset,
         eval_dataset,
-        len_set,
+        set_length,
         len_query,
         obs_dim,
     )
