@@ -39,6 +39,9 @@ flags.DEFINE_string("model_type", "MLP", "Path to reward model.")
 flags.DEFINE_string("ckpt", "", "Path to reward model.")
 flags.DEFINE_integer("fix_mode", -1, "Fix mode for a multimodal environment.")
 flags.DEFINE_bool("append_goal", False, "Append goal to obs.")
+flags.DEFINE_bool("vae_sampling", False, "Sample from VAE.")
+flags.DEFINE_integer("comp_size", 1000, "Size of comparison set.")
+flags.DEFINE_string("vae_norm", "learned_norm", "Normalize VAE latent.")
 
 wandb_config = default_wandb_config()
 wandb_config.update(
@@ -56,6 +59,8 @@ config_flags.DEFINE_config_file(
 
 
 def plot_traj(env, dataset):
+    if "maze" not in FLAGS.env_name:
+        return
     traj_idx = d4rl_utils.new_get_trj_idx(dataset)
     os.makedirs("./traj_plots", exist_ok=True)
 
@@ -88,7 +93,7 @@ def load_reward_model(ckpt):
 def update_observation(observation, mode, append_goal, model_type, reward_model):
     if append_goal:
         observation = np.concatenate([observation, np.array([mode])], axis=-1)
-    elif model_type == "VAE":
+    elif "VAE" in model_type:
         latent = reward_model.biased_latents[mode, 0]
         observation = np.concatenate([observation, latent], axis=-1)
     return observation
@@ -105,11 +110,17 @@ def get_modes_list(env):
     return [FLAGS.fix_mode]
 
 
-def evaluate_fn(agent, env, reward_model, num_episodes):
+def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
     policy_fn = partial(supply_rng(agent.sample_actions), temperature=0.0)
+    eval_reward_fn = None
     eval_metrics = {}
     for n in get_modes_list(env):
         env.set_mode(n)
+        if comp_obs is not None and "VAE" in FLAGS.model_type:
+            latent = reward_model.biased_latents[n, 0]
+            eval_reward_fn = partial(
+                reward_fn, reward_model=reward_model, comp_obs=comp_obs, latent=latent
+            )
         eval_info = evaluate(
             policy_fn,
             env,
@@ -123,11 +134,23 @@ def evaluate_fn(agent, env, reward_model, num_episodes):
                 model_type=FLAGS.model_type,
                 reward_model=reward_model,
             ),
+            reward_fn=eval_reward_fn,
         )
         eval_metrics.update(
             {f"evaluation/mode_{n}_{k}": v for k, v in eval_info.items()}
         )
     return eval_metrics
+
+
+def reward_fn(obs, reward_model, latent, comp_obs):
+    obs = torch.tensor(obs).float().to(next(reward_model.parameters()).device)[None, :2]
+    z = torch.tensor(latent).float().to(next(reward_model.parameters()).device)[None]
+    with torch.no_grad():
+        if "Classifier" in FLAGS.model_type:
+            rewards = reward_model.decode(obs, comp_obs, z)
+        else:
+            rewards = reward_model.decode(obs, z)
+    return rewards.cpu().numpy()
 
 def main(_):
     print(FLAGS.config.to_dict())
@@ -149,13 +172,16 @@ def main(_):
     reward_model = None
     if FLAGS.use_reward_model:
         reward_model = load_reward_model(FLAGS.ckpt)
-    dataset = d4rl_utils.get_dataset(
+    dataset, comp_obs = d4rl_utils.get_dataset(
         env,
         use_reward_model=FLAGS.use_reward_model,
         append_goal=FLAGS.append_goal,
         fix_mode=FLAGS.fix_mode,
         model_type=FLAGS.model_type,
         reward_model=reward_model,
+        vae_sampling=FLAGS.vae_sampling,
+        comp_size=FLAGS.comp_size,
+        vae_norm=FLAGS.vae_norm,
     )
     setup_wandb(FLAGS.config.to_dict(), **FLAGS.wandb)
 
@@ -180,7 +206,9 @@ def main(_):
             wandb.log(train_metrics, step=i)
 
         if i % FLAGS.eval_interval == 0:
-            eval_metrics = evaluate_fn(agent, env, reward_model, FLAGS.eval_episodes)
+            eval_metrics = evaluate_fn(
+                agent, env, reward_model, FLAGS.eval_episodes, comp_obs
+            )
             fig_dict = {
                 "train_batch": wandb.Image(
                     plot_observation_rewards(
