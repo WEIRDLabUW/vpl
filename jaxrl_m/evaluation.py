@@ -58,6 +58,7 @@ def evaluate(
     name="eval_video",
     reset_kwargs={},
     obs_fn=lambda x: x,
+    reward_fn=None,
 ) -> Dict[str, float]:
     if save_video:
         env = WANDBVideo(env, name=name, max_videos=1, render_frame=render_frame)
@@ -67,13 +68,18 @@ def evaluate(
     for i in range(num_episodes):
         observation = env.reset(**reset_kwargs)
         done = False
+        learned_reward = 0.0        
         while not done:
             observation = obs_fn(observation)
             action = policy_fn(observation)
             observation, rew, done, info = env.step(action)
+            if reward_fn is not None:
+                learned_reward += reward_fn(observation)
+                
             done = done
+            if done and reward_fn is not None:
+                info["episode.learned_reward"] = learned_reward
             add_to(stats, flatten(info))
-        add_to(stats, flatten(info, parent_key="final"))
 
     for k, v in stats.items():
         stats[k] = np.mean(v)

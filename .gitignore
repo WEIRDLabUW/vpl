@@ -166,3 +166,8 @@ wandb/
 *.png
 debug*
 plot.py
+*.pt
+*.sh
+*.npy
+test_camera.py
+ravens_dataset.ipynb

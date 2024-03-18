@@ -16,8 +16,13 @@ from pref_learn.utils.utils import (
     prefix_metrics,
 )
 from pref_learn.models.utils import get_datasets, Annealer, EarlyStopper
-from pref_learn.models.vae import VAEModel
-from pref_learn.models.mlp import MLPModel, CategoricalModel, MeanVarianceModel
+from pref_learn.models.vae import VAEModel, VAEClassifier
+from pref_learn.models.mlp import (
+    MLPModel,
+    CategoricalModel,
+    MeanVarianceModel,
+    MLPClassifier,
+)
 import pref_learn.utils.plot_utils as putils
 
 FLAGS_DEF = define_flags_with_default(
@@ -62,7 +67,7 @@ FLAGS_DEF = define_flags_with_default(
     debug_plots=True,
     plot_observations=False,
     reward_scaling=1.0,
-    #biased
+    # biased
     biased_mode="grid",
 )
 
@@ -111,7 +116,13 @@ def main(_):
         len_set,
         len_query,
         obs_dim,
-    ) = get_datasets(FLAGS.dataset_path, observation_dim, action_dim, FLAGS.batch_size, FLAGS.set_size)
+    ) = get_datasets(
+        FLAGS.dataset_path,
+        observation_dim,
+        action_dim,
+        FLAGS.batch_size,
+        FLAGS.set_size,
+    )
 
     if FLAGS.model_type == "MLP":
         reward_model = MLPModel(obs_dim, FLAGS.hidden_dim)
@@ -130,7 +141,7 @@ def main(_):
             hidden_dim=FLAGS.hidden_dim,
             variance_penalty=FLAGS.variance_penalty,
         )
-    elif FLAGS.model_type == "VAE":
+    elif "VAE" in FLAGS.model_type:
         annealer = None
         if FLAGS.use_annealing:
             annealer = Annealer(
@@ -139,9 +150,15 @@ def main(_):
                 baseline=FLAGS.annealer_baseline,
                 cyclical=FLAGS.annealer_cycles > 1,
             )
-        reward_model = VAEModel(
+        if FLAGS.model_type == "VAEClassifier":
+            reward_model = VAEClassifier
+            decoder_input = 2 * obs_dim + FLAGS.latent_dim
+        else:
+            reward_model = VAEModel
+            decoder_input = obs_dim + FLAGS.latent_dim
+        reward_model = reward_model(
             encoder_input=len_set * (2 * observation_dim * len_query + 1),
-            decoder_input=(obs_dim + FLAGS.latent_dim),
+            decoder_input=decoder_input,
             latent_dim=FLAGS.latent_dim,
             hidden_dim=FLAGS.hidden_dim,
             annotation_size=len_set,
@@ -150,8 +167,10 @@ def main(_):
             learned_prior=FLAGS.learned_prior,
             flow_prior=FLAGS.flow_prior,
             annealer=annealer,
-            reward_scaling=FLAGS.reward_scaling
+            reward_scaling=FLAGS.reward_scaling,
         )
+    elif FLAGS.model_type == "MLPClassifier":
+        reward_model = MLPClassifier(obs_dim, FLAGS.hidden_dim)
     else:
         raise NotImplementedError
 
@@ -194,9 +213,17 @@ def main(_):
                     fig_dict = putils.plot_mlp(gym_env, reward_model)
                 elif FLAGS.model_type == "Categorical" or FLAGS.model_type == "MeanVar":
                     fig_dict = putils.plot_mlp_samples(gym_env, reward_model)
+                elif FLAGS.model_type == "MLPClassifier":
+                    fig_dict = putils.plot_classifier(
+                        gym_env, reward_model, eval_dataset
+                    )
                 else:
-                    fig_dict = putils.plot_vae(gym_env, reward_model, eval_dataset)
-                # import pdb; pdb.set_trace()
+                    fig_dict = putils.plot_vae(
+                        gym_env,
+                        reward_model,
+                        eval_dataset,
+                        classifier="Classifier" in FLAGS.model_type,
+                    )
 
                 metrics.update(prefix_metrics(fig_dict, "debug_plots"))
 
@@ -218,7 +245,9 @@ def main(_):
         if epoch % FLAGS.save_freq == 0:
             torch.save(reward_model, save_dir + f"/model_{epoch}.pt")
 
-        if FLAGS.model_type=="VAE" and FLAGS.use_annealing:
+        if (
+            FLAGS.model_type == "VAE" or "VAE" in FLAGS.model_type
+        ) and FLAGS.use_annealing:
             reward_model.annealer.step()
 
         log_metrics(metrics, epoch, wb_logger)

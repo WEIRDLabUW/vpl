@@ -51,7 +51,7 @@ def main(_):
             )
         else:
             # Collectinf dataset from d4rl
-            dataset = get_dataset(gym_env)
+            dataset, _ = get_dataset(gym_env)
 
             # Creating queries from the dataset
             dataset, query_path = get_queries_from_multi(

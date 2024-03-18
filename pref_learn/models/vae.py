@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 from pref_learn.models.flow import Flow
 
+
 class Encoder(nn.Module):
     def __init__(self, input_dim, hidden_dim, latent_dim):
         super(Encoder, self).__init__()
@@ -62,7 +63,7 @@ class VAEModel(nn.Module):
         learned_prior=False,
         flow_prior=False,
         annealer=None,
-        reward_scaling=1.0
+        reward_scaling=1.0,
     ):
         super(VAEModel, self).__init__()
         self.Encoder = Encoder(encoder_input, hidden_dim, latent_dim)
@@ -81,7 +82,7 @@ class VAEModel(nn.Module):
         self.flow_prior = flow_prior
         if flow_prior:
             self.flow = Flow(latent_dim, "radial", 4)
-        
+
         self.kl_weight = kl_weight
         self.annealer = annealer
         self.scaling = reward_scaling
@@ -153,8 +154,8 @@ class VAEModel(nn.Module):
         r0 = self.decode(s1, z)
         r1 = self.decode(s2, z)
 
-        r_hat1 = r0.sum(axis=2)/self.scaling
-        r_hat2 = r1.sum(axis=2)/self.scaling
+        r_hat1 = r0.sum(axis=2) / self.scaling
+        r_hat2 = r1.sum(axis=2) / self.scaling
 
         p_hat = torch.nn.functional.sigmoid(r_hat1 - r_hat2).view(-1, 1)
         labels = y.view(-1, 1)
@@ -180,18 +181,93 @@ class VAEModel(nn.Module):
         return loss, metrics
 
     def sample_prior(self, size):
-        z = torch.randn(size, self.latent_dim).cuda()
+        z = torch.randn(size, self.latent_dim).to(next(self.parameters()).device)
         if self.learned_prior:
-            z = z * torch.exp(0.5*self.log_var) + self.mean
+            z = z * torch.exp(0.5 * self.log_var) + self.mean
         elif self.flow_prior:
             z, _ = self.flow(z)
         return z
-    
+
     def sample_posterior(self, s1, s2, y):
         mean, log_var = self.encode(s1, s2, y)
         z = self.reparameterization(mean, torch.exp(0.5 * log_var))
         return mean, log_var, z
-    
+
     def update_posteriors(self, posteriors, biased_latents):
         self.posteriors = posteriors
         self.biased_latents = biased_latents
+
+
+class VAEClassifier(VAEModel):
+    def __init__(
+        self,
+        encoder_input,
+        decoder_input,
+        latent_dim,
+        hidden_dim,
+        annotation_size,
+        size_segment,
+        kl_weight=1.0,
+        learned_prior=False,
+        flow_prior=False,
+        annealer=None,
+        reward_scaling=1.0,
+    ):
+        super(VAEClassifier, self).__init__(
+            encoder_input,
+            decoder_input,
+            latent_dim,
+            hidden_dim,
+            annotation_size,
+            size_segment,
+            kl_weight,
+            learned_prior,
+            flow_prior,
+            annealer,
+            reward_scaling,
+        )
+
+    def forward(self, s1, s2, y):  # Batch x Ann x T x State, Batch x Ann x 1
+        # import pdb; pdb.set_trace()
+        mean, log_var = self.encode(s1, s2, y)
+
+        if self.flow_prior:
+            z, log_det = self.transform(mean, log_var)
+        else:
+            z = self.reparameterization(mean, torch.exp(0.5 * log_var))  # Batch x Z
+            log_det = None
+        z = z.repeat((1, self.annotation_size * self.size_segment)).view(
+            -1, self.annotation_size, self.size_segment, z.shape[1]
+        )
+
+        p_hat = self.Decoder(torch.cat([s1, s2, z], dim=-1)).view(-1, 1)
+        p_hat = torch.nn.functional.sigmoid(p_hat).view(-1, 1)
+        labels = y.view(-1, 1)
+
+        reconstruction_loss = self.reconstruction_loss(labels, p_hat)
+        accuracy = self.accuracy(labels, p_hat)
+        latent_loss = self.latent_loss(mean, log_var)
+
+        kl_weight = self.annealer.slope() if self.annealer else self.kl_weight
+        loss = reconstruction_loss + kl_weight * latent_loss
+
+        if self.flow_prior:
+            loss = loss - torch.sum(log_det)
+
+        metrics = {
+            "loss": loss.item(),
+            "reconstruction_loss": reconstruction_loss.item(),
+            "kld_loss": latent_loss.item(),
+            "accuracy": accuracy.item(),
+            "kl_weight": kl_weight,
+        }
+
+        return loss, metrics
+
+    def decode(self, x, y, z):  # B x S, N x S, B x Z
+        x = x[:, None].repeat(1, y.shape[0], 1)  # B x N x S
+        z = z[:, None].repeat(1, y.shape[0], 1)  # B x N x Z
+        y = y[None].repeat(x.shape[0], 1, 1)  # B x N x S
+        x = torch.cat([x, y, z], dim=-1)  # B x N x (2S + Z)
+        x = torch.nn.functional.sigmoid(self.Decoder(x))  # B x N x 1
+        return x[:, :, 0].mean(dim=-1)  # (B, )

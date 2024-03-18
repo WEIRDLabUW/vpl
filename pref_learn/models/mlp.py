@@ -211,3 +211,44 @@ class MeanVarianceModel(nn.Module):
         }
 
         return loss, metrics
+
+class MLPClassifier(nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(MLPClassifier, self).__init__()
+        self.classifier_model = nn.Sequential(
+            nn.Linear(2*input_dim, hidden_dim),
+            nn.LeakyReLU(0.2),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(0.2),
+            nn.Linear(hidden_dim, 1),
+            nn.Sigmoid()
+        )
+
+    def get_reward(self, x, y): # B x S, N x S
+        # import pdb; pdb.set_trace()
+        x = x[:, None].repeat(1, y.shape[0], 1) # B x N x S
+        y = y[None].repeat(x.shape[0], 1, 1) # B x N x S
+        x = torch.cat([x, y], dim=-1) # B x N x 2S
+        return self.classifier_model(x)[:, :, 0].mean(dim=-1) # (B, )
+
+    def reconstruction_loss(self, x, x_hat):
+        return nn.functional.binary_cross_entropy(x_hat, x, reduction="sum")
+
+    def accuracy(self, x, x_hat):
+        predicted_class = (x_hat > 0.5).float()
+        return torch.mean((predicted_class == x).float())
+
+    def forward(self, s1, s2, y):
+        p_hat = self.classifier_model(torch.cat([s1, s2], dim=-1)).view(-1, 1)
+        # p_hat = torch.nn.functional.sigmoid(p_hat).view(-1, 1)
+        labels = y.view(-1, 1)
+        loss = self.reconstruction_loss(labels, p_hat)
+        accuracy = self.accuracy(labels, p_hat)
+
+        metrics = {
+            "loss": loss.item(),
+            "reconstruction_loss": loss.item(),
+            "accuracy": accuracy.item(),
+        }
+
+        return loss, metrics
