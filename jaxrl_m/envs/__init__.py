@@ -22,21 +22,35 @@ register(
 )
 
 register(
+    id="maze2d-active-multimodal-v0",
+    entry_point="jaxrl_m.envs.maze:MazeEnv",
+    max_episode_steps=800,
+    kwargs={"close_goals": True},
+)
+
+register(
     id="sort-mode0-v0",
     entry_point="jaxrl_m.envs.sort:SortEnv",
-    max_episode_steps=300,
+    max_episode_steps=30,
     kwargs={"mode": 0},
 )
 
 register(
     id="sort-mode1-v0",
     entry_point="jaxrl_m.envs.sort:SortEnv",
-    max_episode_steps=300,
+    max_episode_steps=30,
     kwargs={"mode": 1},
 )
 
 register(
     id="sort-multimodal-v0",
     entry_point="jaxrl_m.envs.sort:SortEnv",
-    max_episode_steps=300,
+    max_episode_steps=30,
+)
+
+register(
+    id="sort-debug-v0",
+    entry_point="jaxrl_m.envs.sort:SortEnv",
+    max_episode_steps=30,
+    kwargs={"mode": 0, "debug": True},
 )

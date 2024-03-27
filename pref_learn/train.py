@@ -105,7 +105,8 @@ def main(_):
         observation_dim = gym_env.reward_observation_space.shape[0]
     else:
         observation_dim = gym_env.observation_space.shape[0]
-    gym_env.set_biased_mode(FLAGS.biased_mode)
+    if "maze" in FLAGS.env:
+        gym_env.set_biased_mode(FLAGS.biased_mode)
     action_dim = gym_env.action_space.shape[0]
 
     (
@@ -208,7 +209,7 @@ def main(_):
                     for key, val in prefix_metrics(batch_metrics, "eval").items():
                         metrics[key].append(val)
 
-            if FLAGS.debug_plots:
+            if FLAGS.debug_plots and "maze" in FLAGS.env:
                 if FLAGS.model_type == "MLP":
                     fig_dict = putils.plot_mlp(gym_env, reward_model)
                 elif FLAGS.model_type == "Categorical" or FLAGS.model_type == "MeanVar":

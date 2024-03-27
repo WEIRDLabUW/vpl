@@ -41,6 +41,7 @@ def main(_):
     os.makedirs(base_path, exist_ok=True)
 
     gym_env = gym.make(FLAGS.env)
+    gym_env.reset()
     if FLAGS.relabel:
         assert os.path.exists(FLAGS.dataset_path)
         dataset = pickle.load(open(FLAGS.dataset_path, "rb"))

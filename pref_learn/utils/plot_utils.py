@@ -198,7 +198,7 @@ def plot_vae(env, reward_model, dataset, classifier=False, num_samples=4):
     obs = env.get_obs_grid()
     comp_obs = None
     if classifier:
-        comp_obs = dataset.get_mode_data(batch_size=50)["observations"]
+        comp_obs = dataset.get_mode_data(batch_size=50)[0]["observations"]
         comp_obs = comp_obs.reshape(-1, obs.shape[-1])
         comp_obs = (
             torch.from_numpy(comp_obs)

@@ -5,7 +5,7 @@ import d4rl
 
 
 class MazeEnv(gym.Env):
-    def __init__(self, mode=-1):
+    def __init__(self, mode=-1, close_goals=False):
         super().__init__()
         self.env = gym.make("maze2d-large-v1")
         self.observation_space = self.env.observation_space
@@ -16,7 +16,10 @@ class MazeEnv(gym.Env):
         self._max_episode_steps = self.env._max_episode_steps
 
         self.mode = mode
-        self.goals = np.array([(7, 1), (7, 10)])
+        if close_goals:
+            self.goals = np.array([(7, 2), (7, 4)])
+        else:
+            self.goals = np.array([(7, 1), (7, 10)])
         self.relabel_offline_reward = True
         self.is_multimodal = mode < 0
         self.biased_mode = None
@@ -100,7 +103,7 @@ class MazeEnv(gym.Env):
 
     def set_biased_mode(self, mode):
         self.biased_mode = mode
-        
+
     def get_biased_data(self, set_len):
         if self.biased_mode == "grid":
             w, l, _ = self.factor_int(set_len * 2)
@@ -109,8 +112,8 @@ class MazeEnv(gym.Env):
         elif self.biased_mode == "random":
             obs = np.random.uniform(0, 1, (set_len * 2, 2)) * np.array([8, 11])
         elif self.biased_mode == "equal":
-            obs_y = np.random.uniform(5, 7, size=(2*set_len, ))
-            obs_x = np.random.uniform(1, 7, size=(2*set_len, ))
+            obs_y = np.random.uniform(5, 7, size=(2 * set_len,))
+            obs_x = np.random.uniform(1, 7, size=(2 * set_len,))
             obs = np.stack([obs_x, obs_y], axis=1)
         else:
             raise ValueError("Invalid biased mode")

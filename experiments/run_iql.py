@@ -13,6 +13,7 @@ import numpy as np
 import tqdm
 import wandb
 import torch
+import orbax.checkpoint as ocp
 
 from jaxrl_m.evaluation import supply_rng, evaluate
 import jaxrl_m.envs
@@ -29,7 +30,7 @@ flags.DEFINE_integer("seed", np.random.choice(1000000), "Random seed.")
 flags.DEFINE_integer("eval_episodes", 10, "Number of episodes used for evaluation.")
 flags.DEFINE_integer("log_interval", 1000, "Logging interval.")
 flags.DEFINE_integer("eval_interval", 10000, "Eval interval.")
-flags.DEFINE_integer("save_interval", 25000, "Eval interval.")
+flags.DEFINE_integer("save_interval", 250000, "Eval interval.")
 flags.DEFINE_integer("batch_size", 256, "Mini batch size.")
 flags.DEFINE_integer("max_steps", int(1e6), "Number of training steps.")
 flags.DEFINE_bool("save_video", False, "Save video of the agent.")
@@ -69,13 +70,8 @@ def plot_traj(env, dataset):
         obs = dataset["observations"][start : end + 1, :2]
         r = dataset["rewards"][start : end + 1]
         m = dataset["masks"][start : end + 1]
-        norm = matplotlib.colors.NoNorm()
-        ax.scatter(obs[:, 0], obs[:, 1], c=cm.bwr(norm(r)))
-        sm = cm.ScalarMappable(cmap=cm.bwr, norm=norm)
-        sm.set_array([])
-        cb = fig.colorbar(sm, ax=ax)
-        cb.set_label("r(s)")
-
+        sc = ax.scatter(obs[:, 0], obs[:, 1], c=r)
+        cb = plt.colorbar(sc, ax=ax)
         for goal in env.goals:
             ax.scatter(goal[0], goal[1], s=50, c="green", marker="*")
         plt.title(f"{np.argwhere(1-m)}, {r.shape[0]}")
@@ -116,7 +112,7 @@ def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
     eval_metrics = {}
     for n in get_modes_list(env):
         env.set_mode(n)
-        if comp_obs is not None and "VAE" in FLAGS.model_type:
+        if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
             latent = reward_model.biased_latents[n, 0]
             eval_reward_fn = partial(
                 reward_fn, reward_model=reward_model, comp_obs=comp_obs, latent=latent
@@ -154,19 +150,6 @@ def reward_fn(obs, reward_model, latent, comp_obs):
 
 def main(_):
     print(FLAGS.config.to_dict())
-
-    if FLAGS.save_dir is not None:
-        FLAGS.save_dir = os.path.join(
-            FLAGS.save_dir,
-            wandb.run.project,
-            wandb.config.exp_prefix,
-            wandb.config.experiment_id,
-        )
-        os.makedirs(FLAGS.save_dir, exist_ok=True)
-        print(f"Saving config to {FLAGS.save_dir}/config.pkl")
-        with open(os.path.join(FLAGS.save_dir, "config.pkl"), "wb") as f:
-            pickle.dump(get_flag_dict(), f)
-
     env = d4rl_utils.make_env(FLAGS.env_name)
 
     reward_model = None
@@ -182,9 +165,22 @@ def main(_):
         vae_sampling=FLAGS.vae_sampling,
         comp_size=FLAGS.comp_size,
         vae_norm=FLAGS.vae_norm,
+        terminate_on_end="sort" in FLAGS.env_name,
     )
     setup_wandb(FLAGS.config.to_dict(), **FLAGS.wandb)
-
+    if FLAGS.save_dir is not None:
+        FLAGS.save_dir = os.path.join(
+            FLAGS.save_dir,
+            wandb.run.project,
+            wandb.config.exp_prefix,
+            wandb.config.experiment_id,
+        )
+        os.makedirs(FLAGS.save_dir, exist_ok=True)
+        print(f"Saving config to {FLAGS.save_dir}/config.pkl")
+        with open(os.path.join(FLAGS.save_dir, "config.pkl"), "wb") as f:
+            pickle.dump(get_flag_dict(), f)
+        checkpointer = ocp.PyTreeCheckpointer()
+            
     example_batch = dataset.sample(1)
     agent = learner.create_learner(
         FLAGS.seed,
@@ -220,10 +216,10 @@ def main(_):
             wandb.log(eval_metrics, step=i)
 
         if i % FLAGS.save_interval == 0 and FLAGS.save_dir is not None:
-            checkpoints.save_checkpoint(FLAGS.save_dir, agent, i)
+            checkpoints.save_checkpoint(FLAGS.save_dir, agent, i, orbax_checkpointer=checkpointer)
 
     # Final evaluation
-    eval_metrics = evaluate_fn(agent, env, reward_model, num_episodes=1000)
+    eval_metrics = evaluate_fn(agent, env, reward_model, num_episodes=1000, comp_obs=comp_obs)
     for k, v in eval_metrics.items():
         wandb.log({f"FINAL-{k}": v})
 

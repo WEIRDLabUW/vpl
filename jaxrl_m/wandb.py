@@ -163,6 +163,7 @@ class WANDBVideo(gym.Wrapper):
         pixel_keys: Sequence[str] = ("pixels",),
         render_frame: bool = False,
         agent=None,
+        obs_fn=lambda x: x,
     ):
         super().__init__(env)
         self._name = name
@@ -258,7 +259,7 @@ class WANDBVideo(gym.Wrapper):
             video = self.get_rendered_video().transpose(0, 3, 1, 2)
             if video.shape[1] == 1:
                 video = np.repeat(video, 3, 1)
-            video = wandb.Video(video, fps=30, format="mp4")
+            video = wandb.Video(video, fps=10, format="mp4")
             wandb.log({self._name: video}, commit=False)
 
         return obs, reward, done, info

@@ -137,15 +137,14 @@ def relabel_rewards_with_model(
         comparison_obs = sample_comparison_states(
             observations=dataset["observations"],
             size=comp_size,
-            obs_size=observation_dim,
-            gym_env=env,
+            obs_size=observation_dim
         )
         comparison_obs = (
             torch.from_numpy(comparison_obs)
             .float()
             .to(next(reward_model.parameters()).device)
         )
-    for i, (start, end) in enumerate(
+    for traj_id, (start, end) in enumerate(
         tqdm(
             traj_idx,
             desc=f"Relabel {env.spec.id} {model_type}, ag: {append_goal}, fm: {fix_mode}",
@@ -183,8 +182,10 @@ def relabel_rewards_with_model(
         elif model_type == "VAE" or model_type == "VAEClassifier":
             with torch.no_grad():
                 if vae_sampling:
-                    if sampled_z is None or i % sample_every == 0:
-                        sampled_z, norm_z = sample_latent(reward_model, env)
+                    if sampled_z is None or traj_id % sample_every == 0:
+                        sampled_z = sample_latent(reward_model, env)
+                        if vae_norm == "learned_norm":
+                            norm_z = get_norm(traj_id, sampled_z, env, reward_model)
                     z = torch.tensor(sampled_z)
                 else:
                     if fix_mode < 0:
@@ -192,19 +193,20 @@ def relabel_rewards_with_model(
                     else:
                         idx = fix_mode
                     z = torch.tensor(reward_model.biased_latents[idx])
+                batch_z = (
+                    z.repeat(obs.shape[0], 1)
+                    .float()
+                    .to(next(reward_model.parameters()).device)
+                )
                 if model_type == "VAE":
-                    batch_z = (
-                        z.repeat(obs.shape[0], 1)
-                        .float()
-                        .to(next(reward_model.parameters()).device)
-                    )
                     rewards = reward_model.get_reward(
                         torch.cat([input_obs, batch_z], dim=-1)
                     )
 
-                    if vae_norm == "learned_norm" or vae_sampling:
-                        norm_z = get_norm(z, env, reward_model)
-                        rewards = (rewards - norm_z) / 10
+                    if vae_norm == "learned_norm":
+                        min_z, max_z = norm_z
+                        rewards = (rewards - min_z) / (max_z - min_z)
+                        rewards = torch.exp(rewards / 0.1) * 1e-4
                 elif model_type == "VAEClassifier":
                     rewards = []
                     batch_size = comp_size // 10
@@ -212,7 +214,8 @@ def relabel_rewards_with_model(
                         batch_comp = comparison_obs[
                             i * batch_size : (i + 1) * batch_size
                         ]
-                        batch_rewards = reward_model.decode(input_obs, batch_comp, z)
+                        #TODO: check stacking and averaging?
+                        batch_rewards = reward_model.decode(input_obs, batch_comp, batch_z)
                         rewards.append(batch_rewards)
                     rewards = torch.stack(rewards, dim=0)
                     rewards = rewards.mean(dim=0)
@@ -236,14 +239,16 @@ def relabel_rewards_with_model(
         dataset["next_observations"] = np.concatenate(next_obs_list, axis=0)
 
     if model_type == "MLP" or model_type == "Categorical" or model_type == "MeanVar":
+        print("Baseline models")
         new_rewards = (new_rewards - new_rewards.min()) / (
             new_rewards.max() - new_rewards.min()
         )
         new_rewards = np.exp(new_rewards / 0.1)
         new_rewards = new_rewards / new_rewards.mean()
         dataset["rewards"] = new_rewards
-    elif model_type == "VAE" and not vae_sampling and vae_norm == "fixed":
-        for mode in env.get_num_modes():
+    elif model_type == "VAE" and vae_norm == "fixed":
+        print("VAE with fixed norm")
+        for mode in range(env.get_num_modes()):
             id_r = np.argwhere(mode_mask == mode)
             new_rewards[id_r] = (new_rewards[id_r] - new_rewards[id_r].min()) / (
                 new_rewards[id_r].max() - new_rewards[id_r].min()
@@ -251,6 +256,7 @@ def relabel_rewards_with_model(
         new_rewards = new_rewards / new_rewards.mean()
         dataset["rewards"] = new_rewards
     else:
+        print("VAE with learned norm or no norm")
         dataset["rewards"] = new_rewards
 
     if True:  # debug
@@ -303,18 +309,24 @@ def relabel_rewards_with_env(env, dataset, append_goal):
     return dataset
 
 
-def sample_latent(reward_model, env, temp):
+def sample_latent(reward_model, env):
     z_orig = reward_model.sample_prior(1)
-    norm_z = get_norm(z_orig, env, reward_model, temp)
-    return z_orig, norm_z
+    return z_orig
 
 
-def get_norm(z, env, reward_model, temp):
+def get_norm(i, z, env, reward_model):
     obs = env.get_obs_grid()
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
     z = z.repeat(obs.shape[0], 1).float().to(next(reward_model.parameters()).device)
     r = reward_model.decode(obs, z).view(-1, 1)  # .reshape((NX, NY))
-    r /= temp
     N = r.shape[0]
-    norm_z = (torch.logsumexp(r, dim=0) - np.log(N)).item()
-    return norm_z
+    # norm_z = (torch.logsumexp(r, dim=0) - np.log(N)).item()
+    # r = (r - norm_z) / 10
+    # r = (r - r.min()) / (r.max() - r.min())
+    # plt.figure()
+    # obs = obs.cpu().numpy()
+    # sc = plt.scatter(obs[:, 0], obs[:, 1], c=r.detach().cpu().numpy())
+    # plt.colorbar(sc)
+    # plt.savefig(f"z_plots/{i}")
+    # plt.close()
+    return (r.min(), r.max())

@@ -75,11 +75,12 @@ class PreferenceDataset(Dataset):
         )
 
     def get_mode_data(self, batch_size):
+        batch_size = min(batch_size, len(self))
         idxs = np.random.choice(range(len(self)), size=batch_size, replace=False)
         return dict(
             observations=self.pref_dataset["observations"][idxs],
             observations_2=self.pref_dataset["observations_2"][idxs],
-        )
+        ), batch_size
 
 
 class Annealer:
@@ -179,7 +180,7 @@ def get_latent(batch, env, reward_model, mode, num_samples):
 
 
 def get_posterior(env, reward_model, dataset, mode, num_samples):
-    batch = dataset.get_mode_data(num_samples)
+    batch, num_samples = dataset.get_mode_data(num_samples)
     return get_latent(batch, env, reward_model, mode, num_samples)
 
 
