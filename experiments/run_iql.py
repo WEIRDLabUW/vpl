@@ -97,11 +97,14 @@ def update_observation(observation, mode, append_goal, model_type, reward_model)
 
 def get_modes_list(env):
     if FLAGS.fix_mode < 0:
-        n = env.get_num_modes()
-        if n > 1:
-            return range(n)
+        if hasattr(env, "get_num_modes"):
+            n = env.get_num_modes()
+            if n > 1:
+                return range(n)
+            else:
+                return [env.mode]
         else:
-            return [env.mode]
+            return [-1]
         # return range(env.get_num_modes())
     return [FLAGS.fix_mode]
 
@@ -111,7 +114,8 @@ def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
     eval_reward_fn = None
     eval_metrics = {}
     for n in get_modes_list(env):
-        env.set_mode(n)
+        if n > 0:
+            env.set_mode(n)
         if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
             latent = reward_model.biased_latents[n, 0]
             eval_reward_fn = partial(

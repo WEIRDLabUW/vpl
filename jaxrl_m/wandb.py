@@ -211,14 +211,14 @@ class WANDBVideo(gym.Wrapper):
             return
         if self._render_frame:
             frame = self.render(mode="rgb_array")
-            if hasattr(self, "target"):
-                frame = self.write_text(frame, f"target: {self.target}")
+            # if hasattr(self, "target"):
+            #     frame = self.write_text(frame, f"target: {self.target}")
             if self._agent:
                 if self._curr_obs is not None:
                     value = self._agent.eval_critic(self._curr_obs, action)
                     frame = self.write_text(frame, f"critic: {np.round(value, 3)}")
                 self._curr_obs = obs
-            frame = self.write_text(frame, f"action: {action}")
+            # frame = self.write_text(frame, f"action: {action}")
             if "pixels" in self._video:
                 self._video["pixels"].append(frame)
             else:

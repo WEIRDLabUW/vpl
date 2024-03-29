@@ -1,6 +1,6 @@
 import ml_collections
 
-def get_default_config():
+def get_config():
 
     config = ml_collections.ConfigDict({
         'actor_lr': 3e-4,

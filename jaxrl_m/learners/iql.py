@@ -138,13 +138,19 @@ def load_learner(seed, model_path, discount, temperature, expectile, tau, **kwar
     rng, actor_key, critic_key, value_key = jax.random.split(rng, 4)
     # actor = state["actor"]
     hidden_dims = (256,256) #kwargs.get("hidden_dims")
-    action_dim = 2 #kwargs.get("action_dim")
+    action_dim = 6 #kwargs.get("action_dim")
     actor_def = Policy(hidden_dims, action_dim=action_dim, 
             log_std_min=-5.0, state_dependent_std=False, tanh_squash_distribution=False)
     actor = TrainState.create(actor_def, state["actor"]["params"], tx=optax.adam(learning_rate=3e-4))
-    critic = state["critic"]
-    value = state["value"]
-    target_critic = state["target_critic"]
+
+    critic_def = ensemblize(Critic, num_qs=2)(hidden_dims)
+    critic = TrainState.create(critic_def, state["critic"]["params"], tx=optax.adam(learning_rate=3e-4))
+    value_def = ValueCritic(hidden_dims)
+    value = TrainState.create(value_def, state["value"]["params"], tx=optax.adam(learning_rate=3e-4))
+    target_critic = TrainState.create(critic_def, state["critic"]["params"])
+    # critic = state["critic"]
+    # value = state["value"]
+    # target_critic = state["target_critic"]
     config = flax.core.FrozenDict(
         dict(
             discount=discount,
