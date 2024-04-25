@@ -15,13 +15,14 @@ import wandb
 import torch
 import orbax.checkpoint as ocp
 
-from jaxrl_m.evaluation import supply_rng, evaluate
+from jaxrl_m.evaluation import supply_rng, evaluate, sample_evaluate
 import jaxrl_m.envs
 from jaxrl_m.dataset import Dataset
 import jaxrl_m.learners.iql as learner
 import jaxrl_m.learners.d4rl_utils as d4rl_utils
 from jaxrl_m.wandb import setup_wandb, default_wandb_config, get_flag_dict
 from pref_learn.utils.plot_utils import plot_observation_rewards
+from pref_learn.models.utils import get_datasets
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("env_name", "halfcheetah-expert-v2", "Environment name.")
@@ -42,7 +43,8 @@ flags.DEFINE_integer("fix_mode", -1, "Fix mode for a multimodal environment.")
 flags.DEFINE_bool("append_goal", False, "Append goal to obs.")
 flags.DEFINE_bool("vae_sampling", False, "Sample from VAE.")
 flags.DEFINE_integer("comp_size", 1000, "Size of comparison set.")
-flags.DEFINE_string("vae_norm", "learned_norm", "Normalize VAE latent.")
+flags.DEFINE_string("vae_norm", "none", "Normalize VAE latent.")
+flags.DEFINE_string("preference_dataset_path", "", "Path to preference dataset.")
 
 wandb_config = default_wandb_config()
 wandb_config.update(
@@ -86,11 +88,10 @@ def load_reward_model(ckpt):
     return reward_model
 
 
-def update_observation(observation, mode, append_goal, model_type, reward_model):
+def update_observation(observation, mode, append_goal, model_type, latent):
     if append_goal:
         observation = np.concatenate([observation, np.array([mode])], axis=-1)
     elif "VAE" in model_type:
-        latent = reward_model.biased_latents[mode, 0]
         observation = np.concatenate([observation, latent], axis=-1)
     return observation
 
@@ -114,13 +115,14 @@ def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
     eval_reward_fn = None
     eval_metrics = {}
     for n in get_modes_list(env):
-        if n > 0:
+        if hasattr(env, "set_mode"):
             env.set_mode(n)
-        if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
-            latent = reward_model.biased_latents[n, 0]
-            eval_reward_fn = partial(
-                reward_fn, reward_model=reward_model, comp_obs=comp_obs, latent=latent
-            )
+        latent = None
+        # if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
+        #     latent = reward_model.biased_latents[n, 0]
+        #     eval_reward_fn = partial(
+        #         reward_fn, reward_model=reward_model, comp_obs=comp_obs, latent=latent
+        #     )
         eval_info = evaluate(
             policy_fn,
             env,
@@ -132,15 +134,31 @@ def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
                 mode=n,
                 append_goal=FLAGS.append_goal,
                 model_type=FLAGS.model_type,
-                reward_model=reward_model,
+                latent=latent,
             ),
-            reward_fn=eval_reward_fn,
+            # reward_fn=eval_reward_fn,
         )
         eval_metrics.update(
             {f"evaluation/mode_{n}_{k}": v for k, v in eval_info.items()}
         )
     return eval_metrics
 
+def sample_evaluate_fn(env, agent, reward_model, preference_dataset, eval_episodes):
+    policy_fn = partial(supply_rng(agent.sample_actions), temperature=0.0)
+    eval_metrics = sample_evaluate(
+        policy_fn,
+        env,
+        reward_model,
+        preference_dataset,
+        num_episodes=eval_episodes,
+        model_type=FLAGS.model_type,
+        obs_fn=partial(
+            update_observation,
+            append_goal=FLAGS.append_goal,
+            model_type=FLAGS.model_type,
+        ),
+    )
+    return eval_metrics
 
 def reward_fn(obs, reward_model, latent, comp_obs):
     obs = torch.tensor(obs).float().to(next(reward_model.parameters()).device)[None, :2]
@@ -194,6 +212,29 @@ def main(_):
         **FLAGS.config,
     )
 
+    preference_dataset = None
+    if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
+        if hasattr(env, "reward_observation_space"):
+            obs_dim = env.reward_observation_space.shape[0]
+        else:
+            obs_dim = env.observation_space.shape[0]
+        (
+            _,
+            _,
+            _,
+            preference_dataset,
+            set_len,
+            _,
+            _,
+        ) = get_datasets(
+            FLAGS.preference_dataset_path,
+            obs_dim,
+            env.action_space.shape[0],
+            FLAGS.batch_size,
+            reward_model.annotation_size
+        )
+        assert set_len == reward_model.annotation_size
+
     plot_traj(env, dataset)
 
     for i in tqdm.tqdm(
@@ -206,6 +247,9 @@ def main(_):
             wandb.log(train_metrics, step=i)
 
         if i % FLAGS.eval_interval == 0:
+            # Sampling evaluation
+            eval_metrics =  sample_evaluate_fn(env, agent, reward_model, preference_dataset, FLAGS.eval_episodes)
+            wandb.log({f"sampling/{k}":v for k,v in eval_metrics.items()}, step=i)
             eval_metrics = evaluate_fn(
                 agent, env, reward_model, FLAGS.eval_episodes, comp_obs
             )
@@ -223,9 +267,13 @@ def main(_):
             checkpoints.save_checkpoint(FLAGS.save_dir, agent, i, orbax_checkpointer=checkpointer)
 
     # Final evaluation
-    eval_metrics = evaluate_fn(agent, env, reward_model, num_episodes=1000, comp_obs=comp_obs)
+    eval_info = sample_evaluate_fn(env, agent, reward_model, preference_dataset, 100)
+    for k, v in eval_info.items():
+        wandb.log({f"final-sampling-{k}": v})
+
+    eval_metrics = evaluate_fn(agent, env, reward_model, num_episodes=100, comp_obs=comp_obs)
     for k, v in eval_metrics.items():
-        wandb.log({f"FINAL-{k}": v})
+        wandb.log({f"final-{k}": v})
 
 
 if __name__ == "__main__":
