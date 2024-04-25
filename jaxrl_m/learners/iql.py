@@ -50,13 +50,14 @@ class IQLAgent(flax.struct.PyTreeNode):
             q1, q2 = agent.critic(batch['observations'], batch['actions'])
             q = jnp.minimum(q1, q2)
             exp_a = jnp.exp((q - v) * agent.config['temperature'])
+            clip_ratio = jnp.mean(exp_a > 100.0)
             exp_a = jnp.minimum(exp_a, 100.0)
 
             dist = agent.actor(batch['observations'], params=actor_params)
             log_probs = dist.log_prob(batch['actions'])
             actor_loss = -(exp_a * log_probs).mean()
 
-            return actor_loss, {'actor_loss': actor_loss, 'adv': q - v}
+            return actor_loss, {'actor_loss': actor_loss, 'adv': q - v, 'clip_ratio': clip_ratio}
         
         new_critic, critic_info = agent.critic.apply_loss_fn(loss_fn=critic_loss_fn, has_aux=True)
         new_target_critic = target_update(agent.critic, agent.target_critic, agent.config['target_update_rate'])
@@ -138,7 +139,7 @@ def load_learner(seed, model_path, discount, temperature, expectile, tau, **kwar
     rng, actor_key, critic_key, value_key = jax.random.split(rng, 4)
     # actor = state["actor"]
     hidden_dims = (256,256) #kwargs.get("hidden_dims")
-    action_dim = 6 #kwargs.get("action_dim")
+    action_dim = 4 #kwargs.get("action_dim")
     actor_def = Policy(hidden_dims, action_dim=action_dim, 
             log_std_min=-5.0, state_dependent_std=False, tanh_squash_distribution=False)
     actor = TrainState.create(actor_def, state["actor"]["params"], tx=optax.adam(learning_rate=3e-4))

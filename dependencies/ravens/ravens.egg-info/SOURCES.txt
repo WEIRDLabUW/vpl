@@ -48,6 +48,7 @@ ravens/tasks/place_red_in_green.py
 ravens/tasks/planners.py
 ravens/tasks/primitives.py
 ravens/tasks/sort.py
+ravens/tasks/sort_easy.py
 ravens/tasks/stack_block_pyramid.py
 ravens/tasks/sweeping_piles.py
 ravens/tasks/task.py

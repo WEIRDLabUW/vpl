@@ -9,23 +9,29 @@ from ravens.environments.environment import Environment
 
 from d4rl.offline_env import OfflineEnv
 import pybullet as p
-
+import copy
 
 class SortEnv(OfflineEnv, gym.Env):
-    def __init__(self, mode=-1, disp=True, debug=False, ee=False, **kwargs):
+    def __init__(self, mode=-1, disp=False, debug=False, ee=False, **kwargs):
         super().__init__()
 
         env_cls = Environment
         self.env = env_cls(
-            "ravens/ravens/environments/assets",  # TODO: fix path to assets
-            disp=disp,
+            "dependencies/ravens/ravens/environments/assets",  # TODO: fix path to assets
+            disp=disp, # or debug,
             shared_memory=False,
             hz=480,
-            use_egl=not disp
+            use_egl=not disp# and not debug
         )
+        self.mode = mode
+        self.is_multimodal = mode < 0
+        
         self.task = tasks.names["sort"](continuous=False)
         self.task.mode = "train"
         self.env.set_task(self.task)
+
+        if not self.is_multimodal:
+            self.task.sort_by_color = True if mode == 0 else False
 
         self.action_space = gym.spaces.Box(
             low=-1, high=1, shape=(6,)
@@ -38,24 +44,42 @@ class SortEnv(OfflineEnv, gym.Env):
         else:
             self.observation_space = gym.spaces.Box(
                 low=-np.inf, high=np.inf, shape=(12,))
-        self._max_episode_steps = kwargs.get("max_episode_steps", 300)
+        self._max_episode_steps = kwargs.get("max_episode_steps", 50)
 
-        self.mode = mode
-        self.relabel_offline_reward = False
-        self.is_multimodal = mode < 0
-
-        if not self.is_multimodal:
-            self.task.sort_by_color = True if mode == 0 else False
-            if ee:
-                self.dataset_path = os.path.join(
-                    os.path.dirname(__file__), f"dataset/sort_{mode}_ee.hdf5"
-                )
-            else:
-                self.dataset_path = os.path.join(
-                    os.path.dirname(__file__), f"dataset/sort_{mode}_no_ee_debug.hdf5"
-                )
+        self.relabel_offline_reward = True
         self.debug = debug
-        self.init_obs = self.get_dataset()["observations"][0]
+        
+        # if self.debug:
+        #     self.dataset_path = os.path.join(
+        #         os.path.dirname(__file__), f"dataset/sort_mode_0_debug.hdf5"
+        #     )
+        # else:
+        #     self.dataset_path = os.path.join(
+        #         os.path.dirname(__file__), f"dataset/sort_mode_0.hdf5"
+        #     )
+        self.dataset_path =  os.path.join(
+            os.path.dirname(__file__), f"dataset/sort_mode_0_debug.hdf5"
+        )
+        self.init_obs = self.get_dataset()["init_poses"]
+        #     if ee:
+        #         self.dataset_path = os.path.join(
+        #             os.path.dirname(__file__), f"dataset/sort_{mode}_ee.hdf5"
+        #         )
+        #     else:
+        #         if debug:
+        #             self.dataset_path = os.path.join(
+        #                 os.path.dirname(__file__), f"dataset/sort_{mode}_no_ee_debug2.hdf5"
+        #             )
+        #             self.init_obs = self.get_dataset()["init_poses"]
+        #         else:
+        #             self.dataset_path = os.path.join(
+        #                 os.path.dirname(__file__), f"dataset/sort_{mode}_no_ee.hdf5"
+        #             )
+        # else:
+        #     self.dataset_path = os.path.join(
+        #         os.path.dirname(__file__), f"dataset/sort.hdf5"
+        #     )
+        self.goals = None
 
     @property
     def target(self):
@@ -68,10 +92,6 @@ class SortEnv(OfflineEnv, gym.Env):
     def get_dataset(self, path=None):
         path = path or self.dataset_path
         return super().get_dataset(h5path=path)
-
-    def compute_reward(self, state):
-        # TODO:
-        pass
 
     def get_obs(self):
         ee_obs = self.env.get_ee_pose()
@@ -98,7 +118,26 @@ class SortEnv(OfflineEnv, gym.Env):
             # obs.append(dim)
             # obs.append(color)
         return np.concatenate(obs).flatten()
+    
+    def compute_reward(self, state, mode): # 
+        # Setting mode to random if not provided
+        if mode == 0:
+            goals = self.env.task.mode_0_goals
+        elif mode == 1:
+            goals = self.env.task.mode_1_goals
+        else:
+            raise ValueError("Invalid mode")
+        
+        rewards = np.zeros(state.shape[:-1])
+        for i, obj_id in enumerate([7, 8, 9, 10]):
+            obj_pose = state[:, :, 3*i:3*(i+1)]
+            target_pose = np.array(goals[i][0])
+            dist = np.linalg.norm(obj_pose[:, :, :2] - target_pose[:2], axis=-1)
 
+            mask = dist < 0.01
+            rewards = rewards + 5*mask + (1-mask)*-dist
+        return rewards
+    
     def scale_actions(self, action):
         # x,y,z = action[:3]
         # x = 2*x-1
@@ -143,8 +182,8 @@ class SortEnv(OfflineEnv, gym.Env):
         for _ in range(10):
             self.env.step(act_dict)
 
-    def reset_scene(self, traj):
-        init_obs = self.init_obs
+    def reset_scene(self):
+        init_obs = self.init_obs[np.random.randint(len(self.init_obs))]
         if init_obs.shape[0] == 19:
             init_obs = init_obs[7:]
         else:
@@ -156,11 +195,10 @@ class SortEnv(OfflineEnv, gym.Env):
         self.env.task.init_pose(init_pose_obs)
 
     def reset(self):
-        traj = np.load("traj.npy", allow_pickle=True).item()
-        self.reset_scene(traj)
-        obs = self.env.reset()
         if self.debug:
-            return obs
+            self.reset_scene()
+        self.env.reset()
+        self.goals = copy.deepcopy(self.env.task.goals)
         return self.get_obs()
 
     def reset_mode(self):
@@ -169,9 +207,10 @@ class SortEnv(OfflineEnv, gym.Env):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(self.get_action(action))
-        if self.debug:
-            return obs, reward, done, info
+        # if self.debug:
+        #     return obs, reward, done, info
         obs = self.get_obs()
+        # reward = self.compute_reward(obs[None, None], self.mode)[0,0]
         return obs, reward, done, info
 
     ## Functions to handle multimodality

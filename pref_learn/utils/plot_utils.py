@@ -13,10 +13,10 @@ from pref_learn.models.utils import get_all_posterior, get_biased
 
 
 def plot_reward(ax, obs, r, no_norm=False):
-    if not no_norm:
-        r = (r - r.min()) / (r.max() - r.min())
-        r = np.exp(r / 0.1)
-        r = (r - r.min()) / (r.max() - r.min())
+    # if not no_norm:
+    #     r = (r - r.min()) / (r.max() - r.min())
+    #     r = np.exp(r / 0.1)
+    #     r = (r - r.min()) / (r.max() - r.min())
     sc = ax.scatter(obs[:, 0], obs[:, 1], c=r)
     cb = plt.colorbar(sc, ax=ax)
     cb.set_label("r(s)")

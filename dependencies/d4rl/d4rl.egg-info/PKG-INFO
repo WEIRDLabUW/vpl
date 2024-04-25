@@ -2,3 +2,12 @@ Metadata-Version: 2.1
 Name: d4rl
 Version: 1.1
 License-File: LICENSE
+Requires-Dist: gym
+Requires-Dist: numpy
+Requires-Dist: mujoco_py
+Requires-Dist: pybullet
+Requires-Dist: h5py
+Requires-Dist: termcolor
+Requires-Dist: click
+Requires-Dist: dm_control@ git+https://github.com/deepmind/dm_control@main#egg=dm_control
+Requires-Dist: mjrl@ git+https://github.com/aravindr93/mjrl@master#egg=mjrl

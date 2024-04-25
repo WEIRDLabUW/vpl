@@ -92,7 +92,7 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
     action_ = []
     reward_ = []
     done_ = []
-
+    traj_done = []
     # The newer version of the dataset adds an explicit
     # timeouts field. Keep old method for backwards compatability.
     use_timeouts = False
@@ -115,6 +115,12 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
             final_timestep = dataset['timeouts'][i]
         else:
             final_timestep = (episode_step == env.unwrapped._max_episode_steps - 1)
+    
+        if final_timestep:
+            traj_done[-1] = True
+        else:
+            traj_done.append(done_bool)
+            
         if (not terminate_on_end) and final_timestep:
             # Skip this transition and don't apply terminals on the last step of an episode
             episode_step = 0
@@ -135,6 +141,7 @@ def qlearning_dataset(env, dataset=None, terminate_on_end=False, **kwargs):
         'next_observations': np.array(next_obs_),
         'rewards': np.array(reward_),
         'terminals': np.array(done_),
+        'traj_done': np.array(traj_done),
     }
 
 

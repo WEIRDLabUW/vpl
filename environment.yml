@@ -33,7 +33,6 @@ dependencies:
   - parso=0.8.3=pyhd8ed1ab_0
   - pexpect=4.8.0=pyh1a96a4e_2
   - pickleshare=0.7.5=py_1003
-  - pip=23.3.2
   - platformdirs=4.1.0=pyhd8ed1ab_0
   - prompt-toolkit=3.0.42=pyha770c72_0
   - prompt_toolkit=3.0.42=hd8ed1ab_0
@@ -190,13 +189,15 @@ dependencies:
       - tensorboard-data-server==0.7.2
       - tensorboardx==2.6.2.2
       - tensorflow-addons==0.11.2
-      - tensorflow-estimator==2.3.0
+      - tensorflow-estimator==2.13.0
       - tensorflow-hub==0.9.0
+      - tensorflow-io-gcs-filesystem==0.34.0
       - tensorflow-probability==0.21.0
       - tensorstore==0.1.45
       - termcolor==2.4.0
       - threadpoolctl==3.2.0
       - tifffile==2023.7.10
+      - timeout-decorator==0.5.0
       - tokenizers==0.15.0
       - toolz==0.12.0
       - torch==2.1.2
@@ -205,9 +206,9 @@ dependencies:
       - transformers==4.36.2
       - transforms3d==0.3.1
       - triton==2.1.0
-      - typeguard==4.1.5
+      - typeguard==4.0.0
       - typing==3.7.4.3
-      - typing-extensions==4.5.0
+      - typing-extensions==4.10.0
       - typing-inspect==0.9.0
       - u-msgpack-python==2.8.0
       - ujson==5.9.0
@@ -216,3 +217,4 @@ dependencies:
       - werkzeug==3.0.1
       - wrapt==1.16.0
       - zipp==3.17.0
+prefix: /home/max/anaconda3/envs/offline

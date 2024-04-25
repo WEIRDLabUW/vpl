@@ -90,7 +90,8 @@ def load_reward_model(ckpt):
 
 def update_observation(observation, mode, append_goal, model_type, latent):
     if append_goal:
-        observation = np.concatenate([observation, np.array([mode])], axis=-1)
+        goal = np.array([mode]) #np.array(goals[mode][0][:2])
+        observation = np.concatenate([observation, goal], axis=-1)
     elif "VAE" in model_type:
         observation = np.concatenate([observation, latent], axis=-1)
     return observation
@@ -114,6 +115,7 @@ def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
     policy_fn = partial(supply_rng(agent.sample_actions), temperature=0.0)
     eval_reward_fn = None
     eval_metrics = {}
+    fn = evaluate if "sort" not in FLAGS.env_name else evaluate_sort
     for n in get_modes_list(env):
         if hasattr(env, "set_mode"):
             env.set_mode(n)
@@ -161,7 +163,7 @@ def sample_evaluate_fn(env, agent, reward_model, preference_dataset, eval_episod
     return eval_metrics
 
 def reward_fn(obs, reward_model, latent, comp_obs):
-    obs = torch.tensor(obs).float().to(next(reward_model.parameters()).device)[None, :2]
+    obs = torch.tensor(obs).float().to(next(reward_model.parameters()).device)[None]
     z = torch.tensor(latent).float().to(next(reward_model.parameters()).device)[None]
     with torch.no_grad():
         if "Classifier" in FLAGS.model_type:

@@ -35,18 +35,7 @@ def get_dataset(
     vae_norm: str = "fixed",
     vae_sampling: bool = False,
 ):
-    dataset = d4rl.qlearning_dataset(env, terminate_on_end=terminate_on_end)
-    if clip_to_eps:
-        lim = 1 - eps
-        dataset["actions"] = np.clip(dataset["actions"], -lim, lim)
-
-    imputed_next_observations = np.roll(dataset["observations"], -1, axis=0)
-    same_obs = np.all(
-        np.isclose(imputed_next_observations, dataset["next_observations"], atol=1e-5),
-        axis=-1,
-    )
-    dones_float = 1.0 - same_obs.astype(np.float32)
-    dones_float[-1] = 1
+    dataset = d4rl.qlearning_dataset(env)
 
     dones_float = dataset["terminals"].astype(np.float32)
     dataset = {
@@ -56,6 +45,7 @@ def get_dataset(
         "masks": 1.0 - dataset["terminals"],
         "dones_float": dones_float,
         "next_observations": dataset["next_observations"],
+        "traj_done": dataset["traj_done"],
     }
     comparison_obs = None
     if use_reward_model:
@@ -75,16 +65,20 @@ def get_dataset(
         dataset = relabel_rewards_with_env(env, dataset, append_goal)
 
     dataset = {k: v.astype(np.float32) for k, v in dataset.items()}
+    print(dataset["observations"].shape)
     return Dataset(dataset), comparison_obs
 
 
 def new_get_trj_idx(dataset):
-    dones_float = dataset["dones_float"]
+    dones_float = dataset["traj_done"]
     # If the dones are dropped just split uniformly to relabel the trajectories
     if len(np.argwhere(dones_float)) < 2:
-        idx = np.arange(0, len(dones_float), 1000)
+        print("Dones are dropped, splitting uniformly")
+        idx = np.arange(0, len(dones_float), len(dones_float)//5000)
         dones_float[idx] = 1.0
         dones_float[-1] = 1.0
+    else:
+        print("Dones are not dropped")
 
     N = dataset["rewards"].shape[0]
     episode_step = 0
@@ -127,6 +121,7 @@ def relabel_rewards_with_model(
     obs_list = []
     next_obs_list = []
     new_rewards = np.zeros_like(dataset["rewards"])
+    new_next_rewards = np.zeros_like(dataset["rewards"])
     mode_mask = np.zeros_like(dataset["rewards"])
     traj_idx = new_get_trj_idx(dataset)
 
@@ -137,7 +132,7 @@ def relabel_rewards_with_model(
         comparison_obs = sample_comparison_states(
             observations=dataset["observations"],
             size=comp_size,
-            obs_size=observation_dim
+            obs_size=observation_dim,
         )
         comparison_obs = (
             torch.from_numpy(comparison_obs)
@@ -158,27 +153,25 @@ def relabel_rewards_with_model(
             .float()
             .to(next(reward_model.parameters()).device)
         )
+
+        input_next_obs = (
+            torch.from_numpy(next_obs[:, :observation_dim])
+            .float()
+            .to(next(reward_model.parameters()).device)
+        )
         idx = fix_mode
         if model_type == "MLP":
             with torch.no_grad():
                 rewards = reward_model.get_reward(input_obs)
+                next_rewards = reward_model.get_reward(input_next_obs)
         elif model_type == "MLPClassifier":
             with torch.no_grad():
-                # comparison_obs = sample_comparison_states(
-                #     observations=dataset["observations"],
-                #     size=100,
-                #     obs_size=observation_dim,
-                #     gym_env=env,
-                # )
-                # comparison_obs = (
-                #     torch.from_numpy(comparison_obs)
-                #     .float()
-                #     .to(next(reward_model.parameters()).device)
-                # )
                 rewards = reward_model.get_reward(input_obs, comparison_obs)
+                next_rewards = reward_model.get_reward(input_next_obs, comparison_obs)
         elif model_type == "Categorical" or model_type == "MeanVar":
             with torch.no_grad():
                 rewards = reward_model.sample_reward(input_obs)
+                next_rewards = reward_model.sample_reward(input_next_obs)
         elif model_type == "VAE" or model_type == "VAEClassifier":
             with torch.no_grad():
                 if vae_sampling:
@@ -202,22 +195,33 @@ def relabel_rewards_with_model(
                     rewards = reward_model.get_reward(
                         torch.cat([input_obs, batch_z], dim=-1)
                     )
+                    next_rewards = reward_model.get_reward(
+                        torch.cat([input_next_obs, batch_z], dim=-1)
+                    )
 
                     if vae_norm == "learned_norm":
                         rewards = torch.exp((rewards - norm_z)* 1e-3)
                 elif model_type == "VAEClassifier":
                     rewards = []
+                    next_rewards = []
                     batch_size = comp_size // 10
                     for i in range(10):
                         batch_comp = comparison_obs[
                             i * batch_size : (i + 1) * batch_size
                         ]
-
                         batch_rewards = reward_model.decode(input_obs, batch_comp, batch_z)
+                        batch_next_rewards = reward_model.decode(
+                            input_next_obs, batch_comp, batch_z
+                        )
                         rewards.append(batch_rewards)
+                        next_rewards.append(batch_next_rewards)
                     rewards = torch.stack(rewards, dim=0)
                     rewards = rewards.mean(dim=0)
                     rewards = torch.exp(rewards / 0.1) * 1e-4
+
+                    next_rewards = torch.stack(next_rewards, dim=0)
+                    next_rewards = next_rewards.mean(dim=0)
+                    next_rewards = torch.exp(next_rewards / 0.1) * 1e-4
 
                 if append_goal:
                     if vae_sampling:
@@ -231,6 +235,7 @@ def relabel_rewards_with_model(
                     np.concatenate([next_obs, batch_z.cpu().numpy()], axis=-1)
                 )
         new_rewards[start : end + 1] = rewards.squeeze().cpu().numpy()
+        new_next_rewards[start : end + 1] = next_rewards.squeeze().cpu().numpy()
         mode_mask[start : end + 1] = idx
 
     if len(obs_list) > 0:
@@ -245,6 +250,7 @@ def relabel_rewards_with_model(
         new_rewards = np.exp(new_rewards / 0.1)
         new_rewards = new_rewards * 1e-2
         dataset["rewards"] = new_rewards
+        dataset["next_rewards"] = new_next_rewards
     elif model_type == "VAE" and vae_norm == "fixed":
         print("VAE with fixed norm")
         for mode in range(env.get_num_modes()):
@@ -254,9 +260,11 @@ def relabel_rewards_with_model(
             )
         new_rewards = new_rewards * 1e-2
         dataset["rewards"] = new_rewards
+        dataset["next_rewards"] = new_next_rewards
     else:
         print("VAE with learned norm or no norm")
         dataset["rewards"] = new_rewards / np.abs(new_rewards).max()
+        dataset["next_rewards"] = new_next_rewards / np.abs(new_next_rewards).max()
 
     if True:  # debug
         obs0 = dataset["observations"][np.argwhere(mode_mask == 0)][:10000]
@@ -273,6 +281,7 @@ def relabel_rewards_with_model(
 
 def relabel_rewards_with_env(env, dataset, append_goal):
     new_rewards = []
+    new_next_rewards = []
     obs_list = []
     next_obs_list = []
     traj_idx = new_get_trj_idx(dataset)
@@ -285,6 +294,7 @@ def relabel_rewards_with_env(env, dataset, append_goal):
         next_obs = dataset["next_observations"][start : end + 1]
         mode = env.sample_mode()
         new_rewards.append(env.compute_reward(obs[None], mode)[0])
+        new_next_rewards.append(env.compute_reward(next_obs[None], mode)[0])
         modes.append(mode)
         if append_goal:
             obs_list.append(
@@ -297,7 +307,9 @@ def relabel_rewards_with_env(env, dataset, append_goal):
             )
     print("Mean mode:", np.mean(modes))
     new_rewards = np.concatenate(new_rewards)
+    new_next_rewards = np.concatenate(new_next_rewards)
     dataset["rewards"] = new_rewards
+    dataset["next_rewards"] = new_next_rewards
     if append_goal:
         dataset["observations"] = np.concatenate(obs_list, axis=0)
         dataset["next_observations"] = np.concatenate(next_obs_list, axis=0)
