@@ -48,7 +48,39 @@ def add_to(dict_of_lists, single_dict):
     for k, v in single_dict.items():
         dict_of_lists[k].append(v)
 
+def sample_evaluate(
+    policy_fn,
+    env: gym.Env,
+    reward_model,
+    dataset,
+    num_episodes: int,
+    model_type: str,
+    obs_fn=lambda x: x,
+):
+    from pref_learn.models.utils import get_posterior
+    stats = defaultdict(list)
+    env = RecordEpisodeStatistics(env)
+    for i in range(num_episodes):
+        mode = np.random.randint(env.get_num_modes())
+        env.set_mode(mode)
 
+        latent = None
+        if "VAE" in model_type:
+            latent = get_posterior(env, reward_model, dataset, mode, 1)[0]
+        observation = env.reset()
+        done = False
+        while not done:
+            observation = obs_fn(observation, mode=mode, latent=latent)
+            action = policy_fn(observation)
+            observation, _, done, info = env.step(action)
+            if done:
+                info["episode.mode"] = mode
+            add_to(stats, flatten(info))
+
+    for k, v in stats.items():
+        stats[k] = np.mean(v)
+    return stats
+    
 def evaluate(
     policy_fn,
     env: gym.Env,
@@ -79,10 +111,10 @@ def evaluate(
         learned_reward = []
         while not done:
             observation = obs_fn(observation)
-            action = policy_fn(observation)
-            observation, rew, done, info = env.step(action)
             if reward_fn is not None:
                 learned_reward.append(reward_fn(observation))
+            action = policy_fn(observation)
+            observation, rew, done, info = env.step(action)
 
             done = done
             if done and reward_fn is not None:
