@@ -191,15 +191,16 @@ def get_all_posterior(env, reward_model, dataset, num_samples):
     return np.stack(means, axis=0)
 
 
-def get_biased(env, reward_model):
-    assert hasattr(env, "get_biased_data")
-    assert reward_model.size_segment == 1
+def get_biased(env, reward_model, dataset=None):
     means = []
-    obs1, obs2 = env.get_biased_data(reward_model.annotation_size)
-    batch = dict(
-        observations=obs1[None, :, None],
-        observations_2=obs2[None, :, None],
-    )
+    if dataset:
+        batch, _ = dataset.get_mode_data(1)
+    else:
+        obs1, obs2 = env.get_biased_data(reward_model.annotation_size)
+        batch = dict(
+            observations=obs1[None, :, None],
+            observations_2=obs2[None, :, None],
+        )
     # import pdb; pdb.set_trace()
     for mode in range(env.get_num_modes()):
         means.append(get_latent(batch, env, reward_model, mode, 1))

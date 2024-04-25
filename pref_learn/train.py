@@ -209,7 +209,7 @@ def main(_):
                     for key, val in prefix_metrics(batch_metrics, "eval").items():
                         metrics[key].append(val)
 
-            if FLAGS.debug_plots and "maze" in FLAGS.env:
+            if FLAGS.debug_plots and "maze2d" in FLAGS.env:
                 if FLAGS.model_type == "MLP":
                     fig_dict = putils.plot_mlp(gym_env, reward_model)
                 elif FLAGS.model_type == "Categorical" or FLAGS.model_type == "MeanVar":
@@ -227,6 +227,9 @@ def main(_):
                     )
 
                 metrics.update(prefix_metrics(fig_dict, "debug_plots"))
+            elif "VAE" in FLAGS.model_type:
+                putils.update_posterior(gym_env, reward_model, eval_dataset)
+            
 
             criteria = np.mean(metrics["eval/loss"])
 

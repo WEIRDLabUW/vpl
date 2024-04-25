@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from scipy import stats
 import torch
 import wandb
@@ -141,7 +142,8 @@ def plot_latents(env, reward_model, dataset):
     latents = get_all_posterior(env, reward_model, dataset, 128)
     for mode_n in range(modes_n):
         z = latents[mode_n]
-        X_embedded = PCA(n_components=2).fit_transform(z)
+        #X_embedded = PCA(n_components=2).fit_transform(z)
+        X_embedded = TSNE(n_components=2, learning_rate='auto', init='random', perplexity=10).fit_transform(z)
         ax1.scatter(X_embedded[:, 0], X_embedded[:, 1], c=f"C{mode_n}")
 
         if reward_model.flow_prior:
@@ -168,7 +170,7 @@ def plot_z(obs, env, reward_model, latents, comp_obs=None):
     assert latents.shape[2] == reward_model.latent_dim
     num_samples = latents.shape[1]
     modes_n = env.get_num_modes()
-    fig, axs = plt.subplots(modes_n, num_samples, figsize=(5, 8))
+    fig, axs = plt.subplots(modes_n, num_samples, figsize=(env.get_num_modes()*5, 20))
     obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
 
@@ -207,10 +209,10 @@ def plot_vae(env, reward_model, dataset, classifier=False, num_samples=4):
         )
     plot_dict = plot_prior(reward_model)
     plot_dict.update(plot_latents(env, reward_model, dataset))
-
+    n = env.get_num_modes()
     prior_latents = (
-        reward_model.sample_prior(size=num_samples)
-        .view(num_samples // 2, -1, reward_model.latent_dim)
+        reward_model.sample_prior(size=num_samples*n)
+        .view(n, num_samples, reward_model.latent_dim)
         .detach()
         .cpu()
         .numpy()
@@ -233,3 +235,7 @@ def plot_vae(env, reward_model, dataset, classifier=False, num_samples=4):
     if hasattr(env, "plot_gt"):
         plot_dict["gt"] = env.plot_gt(wandb_log=True)
     return plot_dict
+
+def update_posterior(env, reward_model, dataset):
+    biased_latents = get_biased(env, reward_model, dataset)
+    reward_model.update_posteriors(None, biased_latents)
