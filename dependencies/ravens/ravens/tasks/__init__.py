@@ -32,7 +32,7 @@ from ravens.tasks.sweeping_piles import SweepingPiles
 from ravens.tasks.task import Task
 from ravens.tasks.towers_of_hanoi import TowersOfHanoi
 from ravens.tasks.sort import Sorting, ColorSorting, SizeSorting
-
+from ravens.tasks.sort_easy import SortingEasy, SortingEasyFixed
 names = {
     'align-box-corner': AlignBoxCorner,
     'assembling-kits': AssemblingKits,
@@ -52,4 +52,6 @@ names = {
     'sort': Sorting,
     'color-sort': ColorSorting,
     'size-sort': SizeSorting,
+    'sort-easy': SortingEasy,
+    'sort-easy-fixed': SortingEasyFixed,
 }

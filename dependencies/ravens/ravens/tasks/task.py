@@ -183,7 +183,8 @@ class Task():
       # pick_pos = utils.pix_to_xyz(pick_pix, hmap,
       #                             self.bounds, self.pix_size)
       if len(order) == 0:
-        return None
+        zero_pose = ((0, 0, 0), (0, 0, 0, 1))
+        return {'pose0': zero_pose, 'pose1': zero_pose}
       pick_i = np.random.choice(order)
       pick_pos = p.getBasePositionAndOrientation(objs[pick_i][0])[0]
 
@@ -277,13 +278,15 @@ class Task():
       # Move to next goal step if current goal step is complete.
       if np.abs(max_reward - step_reward) < 0.01:
         self.progress += max_reward  # Update task progress.
-        self.goals.pop(0)
+        if len(self.goals) > 1:
+          self.goals.pop(0)
 
     else:
       # At this point we are done with the task but executing the last movements
       # in the plan. We should return 0 reward to prevent the total reward from
       # exceeding 1.0.
       reward = 0.0
+      self.goals.pop(0)
 
     return reward, info
 
@@ -454,6 +457,9 @@ class ContinuousOracle:
 
     self._actions = []
 
+  def reset(self):
+    self._actions = []
+  
   def act(self, obs, info):
     """Get oracle action from planner."""
     if not self._actions:

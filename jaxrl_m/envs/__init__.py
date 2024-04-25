@@ -22,6 +22,13 @@ register(
 )
 
 register(
+    id="maze2d-twogoals-multimodal-bonus-v0",
+    entry_point="jaxrl_m.envs.maze:MazeEnv",
+    max_episode_steps=800,
+    kwargs={"bonus": True},
+)
+
+register(
     id="maze2d-active-multimodal-v0",
     entry_point="jaxrl_m.envs.maze:MazeEnv",
     max_episode_steps=800,
@@ -89,3 +96,24 @@ register(
     max_episode_steps=280,
     kwargs={"mode": 0, "task_penalty": True},
 )
+
+register(
+    id="sort-easy-v0",
+    entry_point="jaxrl_m.envs.sort_easy:SortEnv",
+    max_episode_steps=25,
+)
+
+register(
+    id="sort-easy-fixed-v0",
+    entry_point="jaxrl_m.envs.sort_easy:SortEnv",
+    max_episode_steps=25,
+    kwargs={"mode": 0},
+)
+
+
+register(
+    id="sort-new-v0",
+    entry_point="jaxrl_m.envs.sort_easy2:SortEasyEnv",
+    max_episode_steps=25
+)
+

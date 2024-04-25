@@ -198,7 +198,7 @@ class PickPlaceContinuous:
   def reset(self):
     self.s_bit = 0  # Tracks the suction state.
 
-  def __call__(self, movej, movep, ee, action):
+  def __call__(self, movej, movep, ee, **action):
     del movej
     timeout = movep(action['move_cmd'], speed=self.speed)
     if timeout:

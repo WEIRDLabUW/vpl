@@ -37,7 +37,7 @@ import time
 import numpy as np
 from typing import Optional, Sequence
 from collections import OrderedDict
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 def get_flag_dict():
@@ -201,16 +201,19 @@ class WANDBVideo(gym.Wrapper):
         i1.text(
             (l // 5, w // 5),
             text,
+            font=ImageFont.load_default(size=min(l, w) // 15),
             # font=ImageFont.truetype("FreeMonoBold.ttf", min(l, w) // 10),
             fill=(0, 0, 0),
         )
         return np.asarray(img)
 
-    def _add_frame(self, obs, action=None):
+    def _add_frame(self, obs, action=None, info=None):
         if self._max_videos is not None and self._max_videos <= 0:
             return
         if self._render_frame:
             frame = self.render(mode="rgb_array")
+            if info:
+                frame = self.write_text(frame, info.get("debug_string", " "))
             # if hasattr(self, "target"):
             #     frame = self.write_text(frame, f"target: {self.target}")
             if self._agent:
@@ -250,7 +253,7 @@ class WANDBVideo(gym.Wrapper):
     def step(self, action: np.ndarray):
         obs, reward, done, info = super().step(action)
         # done = done
-        self._add_frame(obs, action)
+        self._add_frame(obs, action, info)
         self._add_rewards(reward)
 
         if done and len(self._video) > 0:

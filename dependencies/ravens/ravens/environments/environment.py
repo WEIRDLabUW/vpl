@@ -507,7 +507,7 @@ class ContinuousEnvironment(Environment):
 
   def step(self, action=None):
     if action is not None:
-      timeout = self.task.primitive(self.movej, self.movep, self.ee, action)
+      timeout = self.task.primitive(self.movej, self.movep, self.ee, **action)
 
       # Exit early if action times out. We still return an observation
       # so that we don't break the Gym API contract.
