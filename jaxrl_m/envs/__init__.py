@@ -76,6 +76,13 @@ register(
     kwargs={"mode": 1, "task_penalty": False},
 )
 
+register(
+    id="kitchen-multimodal-v0",
+    entry_point="jaxrl_m.envs.kitchen:KitchenEnv",
+    max_episode_steps=280,
+    kwargs={"mode": -1, "task_penalty": False},
+)
+
 # register(
 #     id="kitchen-multimodal-v0",
 #     entry_point="jaxrl_m.envs.kitchen:KitchenEnv",

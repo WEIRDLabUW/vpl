@@ -55,7 +55,7 @@ class KitchenEnv(gym.Env):
         self.dist_thresh = 0.3
         self.num_tasks = len(self.obs_element_indices)
 
-        self.goals = [['microwave', 'kettle'], ['light switch', 'slide cabinet']] #["slide cabinet", "hinge cabinet"]] #[['slide cabinet','microwave'], ["kettle", "light switch"]] # #
+        self.goals = [['microwave', 'kettle'], ['bottom left burner', 'slide cabinet']] #["slide cabinet", "hinge cabinet"]] #[['slide cabinet','microwave'], ["kettle", "light switch"]] # #
         self.mode = mode
         self.relabel_offline_reward = True
         self.is_multimodal = mode < 0
@@ -87,7 +87,8 @@ class KitchenEnv(gym.Env):
         if not done:
             return 0.0
         reward = []
-        for task in self._target:
+        target = self.goals[self.mode]
+        for task in target:
             goal = self.obs_element_goals[task]
             indices = self.obs_element_indices[task]
             reward.append(np.linalg.norm(obs[indices] - goal) < self.dist_thresh)
@@ -101,10 +102,10 @@ class KitchenEnv(gym.Env):
             mode = mode
         else:
             mode = self.mode
-        goal = self.goals[mode]
+        target = self.goals[mode]
         rewards = np.zeros(obs.shape[:-1])
         mask = np.ones(obs.shape[:-1], dtype=bool)
-        for task in self._target:
+        for task in target:
             goal = self.obs_element_goals[task]
             indices = self.obs_element_indices[task]
             dist_to_goal = np.linalg.norm(obs[:, :, indices] - goal, axis=-1)
@@ -114,7 +115,7 @@ class KitchenEnv(gym.Env):
         
         if self.task_penalty:
             for task, target_indices in self.obs_element_indices.items():
-                if task in self._target:
+                if task in target:
                     continue
                 init_state = INITIAL_STATE[target_indices]
                 dist_from_init = np.linalg.norm(obs[:, :, target_indices] - init_state, axis=-1)
