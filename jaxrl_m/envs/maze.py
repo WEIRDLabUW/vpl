@@ -2,10 +2,11 @@ import math
 import gym
 import numpy as np
 import d4rl
+from jaxrl_m.envs.maze_utils import get_qmatrix, get_reward, apply_walls, plot_walls, factor_int
 
 
 class MazeEnv(gym.Env):
-    def __init__(self, mode=-1, close_goals=False):
+    def __init__(self, mode=-1, close_goals=False, bonus=False):
         super().__init__()
         self.env = gym.make("maze2d-large-v1")
         self.observation_space = self.env.observation_space
@@ -25,6 +26,8 @@ class MazeEnv(gym.Env):
         self.biased_mode = None
         if not self.is_multimodal:
             self.env.set_target(self.goals[mode])
+
+        self.qmatrixes = [get_qmatrix(self.env, goal, self.get_obs_grid()) for goal in self.goals]
 
     @property
     def target(self):
@@ -55,13 +58,11 @@ class MazeEnv(gym.Env):
             mode = mode
         else:
             mode = self.mode
-        goal = self.goals[mode]
+        qmatrix, r_min, r_max = self.qmatrixes[mode]
         obs_xy = obs[:, :, :2]
-        dist_to_goal = np.linalg.norm(goal[None, None] - obs_xy, axis=-1)
-        rewards = -dist_to_goal
-        bonus = 1 * (dist_to_goal < 0.5)
-        # Reward is negative distance to goal + bonus
-        return rewards + bonus
+        reward = get_reward(self.env, qmatrix, obs_xy)
+        reward = (reward - r_min) / (r_max - r_min)
+        return reward
 
     def plot_gt(self, wandb_log=False):
         import matplotlib.pyplot as plt
@@ -70,43 +71,38 @@ class MazeEnv(gym.Env):
         xv, yv = np.meshgrid(
             np.linspace(*(0, 8), 100), np.linspace(*(0, 11), 100), indexing="ij"
         )
-        obs1, obs2 = self.get_biased_data(16)
-        obs1 *= 10
-        obs2 *= 10
         points = np.concatenate([xv.reshape(-1, 1), yv.reshape(-1, 1)], axis=1)[None]
         r = [self.compute_reward(points, mode) for mode in range(self.get_num_modes())]
-        fig, axs = plt.subplots(1, self.get_num_modes(), figsize=(10, 8))
+        fig, axs = plt.subplots(1, self.get_num_modes(), figsize=(self.get_num_modes()*10, 8))
         if self.get_num_modes() == 1:
             axs_flat = [axs]
         else:
             axs_flat = axs.flatten()
         for i, ax in enumerate(axs_flat):
-            ax.imshow(
-                (r[i].reshape(100, 100)).T,
-                cmap="viridis",
-                interpolation="nearest",
-                origin="lower",
-            )
-            ax.scatter(obs1[:, 0], obs1[:, 1], c="red", s=50, marker="x")
-            ax.scatter(obs2[:, 0], obs2[:, 1], c="blue", s=50, marker="x")
-            # self.plot_goals(ax)
+            r_hat = apply_walls(self.env, r[i][0], points[0])
+            sc = ax.scatter(points[0, :, 0], points[0, :, 1], c=r_hat)
+            cb = plt.colorbar(sc, ax=ax)
+            cb.set_label("r(s)")
+            self.plot_goals(ax)
         plt.tight_layout()
         if wandb_log:
             return wandb.Image(fig)
         else:
+            print("Saving reward plot")
             plt.savefig("reward_plot")
         plt.close(fig)
 
     def plot_goals(self, ax):
+        plot_walls(self.env, ax, self.get_obs_grid())
         for g in self.goals:
-            ax.scatter(g[0], g[1], s=50, c="green", marker="*")
+            ax.scatter(g[0], g[1], s=100, c="black", marker="o")
 
     def set_biased_mode(self, mode):
         self.biased_mode = mode
 
     def get_biased_data(self, set_len):
         if self.biased_mode == "grid":
-            w, l, _ = self.factor_int(set_len * 2)
+            w, l, _ = factor_int(set_len * 2)
             obs = np.mgrid[0 : 8 : w * 1j, 0 : 11 : l * 1j]
             obs = obs.reshape(obs.shape[0], -1).T
         elif self.biased_mode == "random":
@@ -134,12 +130,12 @@ class MazeEnv(gym.Env):
     ## Functions to handle multimodality
     def get_num_modes(self):
         if self.is_multimodal:
-            return 2
+            return len(self.goals)
         return 1
 
     def sample_mode(self):
         if self.is_multimodal:
-            return np.random.randint(2)
+            return np.random.randint(len(self.goals))
         return self.mode
 
     def reset_mode(self):
@@ -149,11 +145,3 @@ class MazeEnv(gym.Env):
         if self.is_multimodal:
             self.mode = mode
             self.env.set_target(self.goals[mode])
-
-    def factor_int(self, n):
-        val = math.ceil(math.sqrt(n))
-        val2 = int(n / val)
-        while val2 * val != float(n):
-            val -= 1
-            val2 = int(n / val)
-        return val, val2, n
