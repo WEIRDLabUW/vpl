@@ -102,7 +102,10 @@ def sample_evaluate(
                 add_to(stats, flatten(info))
 
     for k, v in stats.items():
-        stats[k] = np.mean(v)
+        try:
+            stats[k] = np.mean(v)
+        except:
+            pass
     return stats
 
 
@@ -157,7 +160,10 @@ def evaluate(
                 add_to(stats, flatten(info))
 
     for k, v in stats.items():
-        stats[k] = np.mean(v)
+        try:
+            stats[k] = np.mean(v)
+        except:
+            pass
     return stats
 
 

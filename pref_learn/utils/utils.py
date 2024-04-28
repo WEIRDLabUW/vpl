@@ -83,7 +83,7 @@ class WandBLogger(object):
             config=self._variant,
             project=self.config.project,
             dir=self.config.output_dir,
-            group=self.config.group,
+            # group=self.config.group,
             name=self.config.experiment_id,
             # anonymous=self.config.anonymous,
             notes=self.config.notes,

@@ -113,18 +113,16 @@ def get_modes_list(env):
 
 def evaluate_fn(agent, env, reward_model, num_episodes, comp_obs=None):
     policy_fn = partial(supply_rng(agent.sample_actions), temperature=0.0)
-    eval_reward_fn = None
     eval_metrics = {}
-    fn = evaluate if "sort" not in FLAGS.env_name else evaluate_sort
     for n in get_modes_list(env):
         if hasattr(env, "set_mode"):
             env.set_mode(n)
         latent = None
-        # if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
-        #     latent = reward_model.biased_latents[n, 0]
-        #     eval_reward_fn = partial(
-        #         reward_fn, reward_model=reward_model, comp_obs=comp_obs, latent=latent
-        #     )
+        if FLAGS.use_reward_model and "VAE" in FLAGS.model_type:
+            latent = reward_model.biased_latents[n, 0]
+            # eval_reward_fn = partial(
+            #     reward_fn, reward_model=reward_model, comp_obs=comp_obs, latent=latent
+            # )
         eval_info = evaluate(
             policy_fn,
             env,
