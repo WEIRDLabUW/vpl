@@ -1,35 +1,95 @@
-# A JAX Backbone for RL projects
+## Personalizing Reinforcement Learning from Human Feedback with Variational Preference Learning
 
-This project serves as a "central backbone" for an RL codebase, designed to accelerate prototyping and diagnosis of **new** algorithms (although it auxiliarily does contain reference implementations of SAC, CQL, IQL, BC). It borrows greatly from Ilya Kostrikov's  [JaxRL](https://github.com/ikostrikov/jaxrl) codebase. 
+####  [[Website]](https://weirdlabuw.github.io/vpl/) [[Paper]](https://arxiv.org/) 
 
-The primary goal of the codebase is to make ease of coding up a new algorithm: towards this goal, the primary philosophy is that **algorithms should be single-file implementations**. This means that (almost) all components of the algorithm (from update rule to network choices to hyperparameter choices) are all contained in one file (e.g. see [BC example](jaxrl_m/example_agents/continuous_bc.py)). This makes it easy to read and understand the algorithm, and also makes it easy to modify the algorithm to test out new ideas. The code is also designed to scale as easily as possible to multi-GPU / TPU setups, with simple abstractions for distributed training.
+[Sriyash Poddar<sup>1</sup>](https://sriya.sh), [Yanming Wan<sup>1</sup>](https://yanmingwan.com/), [Hamish Ivison<sup>1</sup>](https://hamishivi.github.io/), [Abhishek Gupta<sup>1</sup>](https://homes.cs.washington.edu/~abhgupta), [Natasha Jaques<sup>1</sup>](https://natashajaques.ai)<br/>
 
-## Installation
+<sup>1</sup>University of Washington
 
-Requires `jax`, `flax`, `optax`, `distrax`, and optionally `wandb` for logging. Clone this repository and install it (e.g. `pip install -e .`).
+This repo is an implementation of the control experiments of VPL. VPL is a varitional framework for learning from human feedback (binary preference labels) i.e. inferring a novel user-specific latent and learning reward models and policies conditioned on this latent without additional user-specific data. This is used for quick adaptation to specific user preferences without retraining the entire model or ignoring underrepresented groups.
 
-## Usage
+## Instructions
 
-The fastest way to understand how to use this skeleton is to see the reference SAC implementation: [Agent: sac.py](custom_agents/mujoco/sac.py) and [Launcher: mujoco_sac.py](experiments/mujoco_sac.py)
 
-The code contains the following files:
+#### Setting up repo
+```
+git clone git@github.com:WEIRDLabUW/vpl.git
+```
 
-- [jaxrl_m.common](jaxrl_m/common.py): Contains the TrainState abstraction (a fork of Flax's TrainState class with some additional syntactic features for ease of use), and some other useful general utilities (`target_update`, `shard_batch`)
-- [jaxrl_m.dataset](jaxrl_m/dataset.py): Contains the Dataset class (which can store and sample from buffers containing arbitrarily nested dictionaries) and an equivalent ReplayBuffer class
-- [jaxrl_m.networks](jaxrl_m/networks.py): Contains implementations of common RL networks (MLP, Critic, ValueCritic, Policy)
-- [jaxrl_m.evaluation](jaxrl_m/evaluation.py): Contains code for running evaluation episodes of agents (e.g. with the `evaluate(policy, env)` function)
-- [jaxrl_m.wandb](jaxrl_m/wandb.py): Contains code for easily setting up Weights & Biases for experiments
-- [jaxrl_m.typing](jaxrl_m/typing.py): Useful type aliases
-- [jaxrl_m.vision](jaxrl_m/vision/__init__.py): `vision.models` contains common vision models (e.g. ResNet, ResNetV2, Impala), `vision.data_augmentations` contains common augmentations (e.g. random crop, random color jitter, gaussian blur)
+#### Install Dependencies
+```
+conda create -n vpl python=3.10
+conda activate vpl
+pip install -r requirements.txt
+pip install -e dependencies/d4rl --no-deps
+pip install -e dependencies/ravens
+pip install -e .
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+Install "mujoco-py" from here: https://github.com/vwxyzjn/free-mujoco-py 
+```
 
-Example implementations:
+## Reward Learning
 
-1. [Continuous BC](jaxrl_m/example_agents/continuous_bc.py)
-2. [Discrete BC](jaxrl_m/example_agents/discrete_bc.py)
-3. [SAC](custom_agents/mujoco/sac.py)
-3. [IQL](custom_agents/mujoco/iql.py)
+To create preference dataset for VPL:
+```
+python -m pref_learn.create_dataset --num_query=<num of comparison pairs> --env=<env_name> --query_len=<query_length> --set_len=<annotation_batch_size>
+```
 
-Example Launchers:
+To train VPL on a preference dataset, run the following commands:
+```
+python pref_learn/train.py \
+    --comment=<project_name> \
+    --env=<env_name> \
+    --dataset_path=<dataset_path> \
+    --model_type=<reward_model_class> \
+    --logging.output_dir="logs" \
+    --seed "seed" \
+```
 
-1. [Mujoco SAC](experiments/mujoco_sac.py)
-2. [D4RL IQL](experiments/d4rl_iql.py)
+
+## Policy Learning
+To train VPL policies:
+
+```
+python experiments/run_iql.py \
+        --env_name=<env_name> \
+        --seed=<seed> \
+        --model_type=<reward_model_type> \
+        --ckpt=<reward_model_checkpoint_dir> \
+        --use_reward_model=True
+```
+
+
+## Active Learning
+
+To evaluate the VPL policy using actively queried samples:
+
+```
+python experiments/eval.py \
+   --env_name=<env_name> \
+   --samples=<eval_episodes>
+   --sampling_method="information_gain" \
+   --preference_dataset_path=<path to preference dataset> \
+   --reward_model_path=<reward_model_checkpoint_dir> \
+   --policy_path=<policy_checkpoint_dir>   
+```
+
+#### All examples scripts can be found in the scripts directory
+
+
+## Acknowledgement
+
+This repository uses the IQL implementation in jax from https://github.com/dibyaghosh/jaxrl_m.
+
+
+## Bibtex
+If you find this code useful, please cite:
+
+```
+@article{poddar2024vpl,
+    author    = {Poddar, Sriyash and Wan, Yanming and Ivision, Hamish and Gupta, Abhishek and Jaques, Natasha},
+    title     = {Personalizing Reinforcement Learning from Human Feedback with Variational Preference Learning},
+    booktitle = {ArXiv Preprint},
+    year      = {2024},
+}
+```
