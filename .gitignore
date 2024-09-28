@@ -159,26 +159,4 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-slurm*/
-pref_datasets
-*logs*
-wandb/
-*.png
-debug*
-plot.py
-*.pt
-*.sh
-*.npy
-test_camera.py
-ravens_dataset.ipynb
-active_learning
-vpl_maze*
-*plots*
-scripts*
-rebuttal*
-maze*
-high_dim*
-vpl-llama*
-vae_models*
-reward_models_test*
-vpl_sort
+data/
