@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=maze_hidden
+#SBATCH --job-name=debug
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=sriyash@cs.washington.edu
 
@@ -14,9 +14,9 @@
 
 #SBATCH --chdir=/gscratch/weirdlab/sriyash/Variational-Preference-Learning
 #SBATCH --export=all
-#SBATCH --output=maze_hidden/%j-out.txt   # where STDOUT goes
-#SBATCH --error=maze_hidden/%j-err.txt    # where STDERR goes
-#SBATCH --array=0-4
+#SBATCH --output=debug/%j-out.txt   # where STDOUT goes
+#SBATCH --error=debug/%j-err.txt    # where STDERR goes
+#SBATCH --array=0-2
 
 HOME_DIR="/gscratch/weirdlab/sriyash/vpl"
 export WANDB_MODE=online
@@ -40,7 +40,7 @@ python pref_learn/train.py \
         --seed 0 \
         --learned_prior=True \
         --use_annealing=True \
-        --n_epochs=500 --latent_dim 16 --debug_plots True
+        --n_epochs=500 --debug_plots True
 
 ckpt_dir="logs/$env/$model_type/$comment/s0"
 
@@ -54,5 +54,5 @@ python experiments/run_iql.py \
         --seed 0 \
         --eval_interval 100000 --eval_episodes 10 \
         --model_type $model_type --preference_dataset_path $dataset_path \
-        --vae_norm "max" --comp_size 1000 \
-        --batch_size 256 --use_reward_model=True --ckpt $ckpt_dir
+        --vae_norm "none" --comp_size 1000 \
+        --batch_size 256 --use_reward_model=True --ckpt $ckpt_dir --vae_sampling True

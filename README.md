@@ -74,7 +74,11 @@ python experiments/eval.py \
    --policy_path=<policy_checkpoint_dir>   
 ```
 
-#### All examples scripts can be found in the scripts directory
+#### All examples scripts can be found in the scripts directory. Run the script as follows:
+
+```
+bash run.sh VAE max 
+```
 
 
 ## Acknowledgement

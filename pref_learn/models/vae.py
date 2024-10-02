@@ -132,7 +132,7 @@ class VAEModel(nn.Module):
                 1
                 + (log_var - self.log_var)
                 - (log_var - self.log_var).exp()
-                - (mean.pow(2) - self.mean.pow(2)) / (self.log_var.exp())
+                - (mean - self.mean).pow(2) / (self.log_var.exp())
             )
         else:
             kl = -torch.sum(1.0 + log_var - mean.pow(2) - log_var.exp())

@@ -17,12 +17,11 @@ class MazeEnv(gym.Env):
         self._max_episode_steps = self.env._max_episode_steps
 
         self.mode = mode
-        if hidden_eval:
-            self.train_goals = np.array([(7, 1), (7, 10), (1,1), (1, 10), (3,8), (5,4), (1, 4), (5, 10), (4, 1), (5, 7)])
-            self.goals = self.train_goals
-            self.test_goals = np.array([(3, 10), (7, 4), (1, 6), (3, 1), (7, 8)])
-        else:
-            self.goals = np.array([(7, 1), (7, 10)])
+        #     self.train_goals = np.array([(7, 1), (7, 10), (1,1), (1, 10), (3,8), (5,4), (1, 4), (5, 10), (4, 1), (5, 7)])
+        #     self.goals = self.train_goals
+        #     self.test_goals = np.array([(3, 10), (7, 4), (1, 6), (3, 1), (7, 8)])
+        # else:
+        self.goals = np.array([(7, 1), (7, 10)])
         self.relabel_offline_reward = True
         self.is_multimodal = mode < 0
         self.biased_mode = None
@@ -30,9 +29,9 @@ class MazeEnv(gym.Env):
             self.env.set_target(self.goals[mode])
 
         self.qmatrixes = [get_qmatrix(self.env, goal, self.get_obs_grid()) for goal in self.goals]
-        if hidden_eval:
-            self.train_qmatrixes = [get_qmatrix(self.env, goal, self.get_obs_grid()) for goal in self.train_goals]
-            self.test_qmatrixes = [get_qmatrix(self.env, goal, self.get_obs_grid()) for goal in self.test_goals]
+        # if hidden_eval:
+        #     self.train_qmatrixes = [get_qmatrix(self.env, goal, self.get_obs_grid()) for goal in self.train_goals]
+        #     self.test_qmatrixes = [get_qmatrix(self.env, goal, self.get_obs_grid()) for goal in self.test_goals]
 
     @property
     def target(self):
@@ -44,13 +43,13 @@ class MazeEnv(gym.Env):
     def reset(self):
         return self.env.reset()
     
-    def set_training_goals(self):
-        self.goals = self.train_goals
-        self.qmatrixes = self.train_qmatrixes
+    # def set_training_goals(self):
+    #     self.goals = self.train_goals
+    #     self.qmatrixes = self.train_qmatrixes
     
-    def set_eval_goals(self):
-        self.goals = self.test_goals
-        self.qmatrixes = self.test_qmatrixes
+    # def set_eval_goals(self):
+    #     self.goals = self.test_goals
+    #     self.qmatrixes = self.test_qmatrixes
 
     def step(self, action):
         # Compute shaped reward

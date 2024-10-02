@@ -28,12 +28,12 @@ register(
     kwargs={"bonus": True},
 )
 
-register(
-    id="maze2d-hidden-v0",
-    entry_point="jaxrl_m.envs.maze:MazeEnv",
-    max_episode_steps=800,
-    kwargs={"hidden_eval": True},
-)
+# register(
+#     id="maze2d-hidden-v0",
+#     entry_point="jaxrl_m.envs.maze:MazeEnv",
+#     max_episode_steps=800,
+#     kwargs={"hidden_eval": True},
+# )
 
 register(
     id="kitchen-mode0-v0",

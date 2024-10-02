@@ -67,7 +67,7 @@ def sample_evaluate(
     model_type: str,
     obs_fn=lambda x: x,
 ):
-    env.set_eval_goals()
+    # env.set_eval_goals()
     from pref_learn.models.utils import get_posterior
 
     stats = defaultdict(list)
@@ -107,7 +107,7 @@ def sample_evaluate(
             stats[k] = np.mean(v)
         except:
             pass
-    env.set_training_goals()
+    # env.set_training_goals()
     return stats
 
 

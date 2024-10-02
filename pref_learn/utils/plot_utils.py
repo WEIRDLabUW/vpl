@@ -170,7 +170,7 @@ def plot_z(obs, env, reward_model, latents, comp_obs=None):
     assert latents.shape[2] == reward_model.latent_dim
     num_samples = latents.shape[1]
     modes_n = env.get_num_modes()
-    fig, axs = plt.subplots(modes_n, num_samples, figsize=(env.get_num_modes()*5, 20))
+    fig, axs = plt.subplots(modes_n, num_samples, figsize=(10*num_samples, 8*env.get_num_modes()))
     obs_copy = np.copy(obs)
     obs = torch.from_numpy(obs).float().to(next(reward_model.parameters()).device)
 
