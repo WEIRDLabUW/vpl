@@ -8,7 +8,7 @@ def get_config():
     config.value_lr = 3e-4
     config.critic_lr = 3e-4
 
-    config.hidden_dims = (1024, 1024, 1024, 1024)
+    config.hidden_dims = (256, 256)
 
     config.discount = 0.99
 

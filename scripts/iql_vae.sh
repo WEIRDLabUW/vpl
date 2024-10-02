@@ -24,35 +24,35 @@ source ${HOME}/.bashrc
 conda activate offline
 cd $HOME_DIR
 
-env="maze2d-hidden-v0"
+env="maze2d-twogoals-multimodal-v0"
 model_type="VAE"
-dataset_path=data/test_maze_dataset
+dataset_path=./pref_datasets/maze2d-twogoals-multimodal-v0/relabelled_queries_num5000_q1_s16
 
-export WANDB_PROJECT=maze_hidden_rewards
+export WANDB_PROJECT=release_debug
 export WANDB_GROUP=$model_type
-comment="vae-hidden"
+comment="vae"
 python pref_learn/train.py \
         --comment=$comment \
         --env=$env \
         --dataset_path=$dataset_path \
         --model_type=$model_type \
-        --logging.output_dir="maze_hidden" \
-        --seed $SLURM_ARRAY_TASK_ID \
+        --logging.output_dir="logs" \
+        --seed 0 \
         --learned_prior=True \
         --use_annealing=True \
-        --n_epochs=500 --latent_dim 16 --batch_size 256 --hidden_dim 256
+        --n_epochs=500 --latent_dim 16 --debug_plots True
 
-ckpt_dir="maze_hidden/$env/$model_type/$comment/s$SLURM_ARRAY_TASK_ID"
+ckpt_dir="logs/$env/$model_type/$comment/s0"
 
-export WANDB_PROJECT=maze_hidden_policy
+export WANDB_PROJECT=release_debug
 export WANDB_GROUP=$model_type
 
 python experiments/run_iql.py \
         --config=configs/maze_config.py \
         --env_name $env \
         --save_video True \
-        --seed $SLURM_ARRAY_TASK_ID \
-        --eval_interval 10000 --eval_episodes 10 \
+        --seed 0 \
+        --eval_interval 100000 --eval_episodes 10 \
         --model_type $model_type --preference_dataset_path $dataset_path \
         --vae_norm "max" --comp_size 1000 \
-        --batch_size 1024 --use_reward_model=True --ckpt $ckpt_dir
+        --batch_size 256 --use_reward_model=True --ckpt $ckpt_dir
